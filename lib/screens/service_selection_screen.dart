@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:miles2go/screens/vehicle_list.dart';
 import 'ride_search_screen.dart'; // Add this import
 
 class ServiceSelectionScreen extends StatelessWidget {
@@ -46,7 +47,11 @@ class ServiceSelectionScreen extends StatelessWidget {
                   children: [
                     ElevatedButton(
                       onPressed: () {
-                        // Handle create ride
+                        // Navigate to RideSearchScreen
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const VehicleListScreen()),
+                        );
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF4A1A70),
