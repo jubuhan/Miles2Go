@@ -27,6 +27,7 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
   LocationModel? _fromLocation;
   LocationModel? _toLocation;
   String? _selectedDate;
+  int _passengerCount = 1;
   Set<Marker> _markers = {};
   List<AutocompletePrediction> _predictions = [];
   bool _isLoading = false;
@@ -282,6 +283,22 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
     }
   }
 
+  void _decrementPassengers() {
+    if (_passengerCount > 1) {
+      setState(() {
+        _passengerCount--;
+      });
+    }
+  }
+
+  void _incrementPassengers() {
+    if (_passengerCount < 8) { // Common max limit for standard vehicles
+      setState(() {
+        _passengerCount++;
+      });
+    }
+  }
+
   Future<void> _selectDate() async {
     final date = await showDatePicker(
       context: context,
@@ -323,7 +340,7 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
           from: _fromLocation!.name,
           to: _toLocation!.name,
           date: _selectedDate!,
-          passengers: '1',
+          passengers: _passengerCount.toString(),
         ),
       ),
     );
@@ -441,6 +458,8 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
           const SizedBox(height: 16),
           _buildToField(),
           const SizedBox(height: 16),
+          _buildPassengersSelector(),
+          const SizedBox(height: 16),
           _buildDateAndSearchRow(),
         ],
       ),
@@ -491,6 +510,46 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
           icon: const Icon(Icons.place, color: Colors.white),
           onPressed: () {},
         ),
+      ),
+    );
+  }
+
+  Widget _buildPassengersSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.people, color: Colors.white),
+          const SizedBox(width: 12),
+          const Text(
+            'Passengers',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const Spacer(),
+          IconButton(
+            icon: const Icon(Icons.remove_circle_outline, color: Colors.white),
+            onPressed: _decrementPassengers,
+          ),
+          Text(
+            _passengerCount.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline, color: Colors.white),
+            onPressed: _incrementPassengers,
+          ),
+        ],
       ),
     );
   }
