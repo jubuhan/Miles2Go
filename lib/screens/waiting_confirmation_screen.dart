@@ -19,10 +19,11 @@ class WaitingConfirmationScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFF1A3A4A),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back),
+          color: Colors.black,
           onPressed: () => Navigator.pop(context),
         ),
       ),

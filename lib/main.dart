@@ -3,11 +3,10 @@ import 'package:miles2go/login/login.dart';
 import 'package:miles2go/login/otp.dart';
 
 void main() {
-
   runApp(
     MaterialApp(
-    home:  SignUpPage()) 
-    );
+    home: SignUpPage()) 
+  );
 }
 
 class SignUpPage extends StatefulWidget {
@@ -24,6 +23,15 @@ class _SignUpPageState extends State<SignUpPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  
+  // Added for bottom navigation bar
+  int _selectedIndex = 0;
+  
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
 
   @override
   void dispose() {
@@ -201,6 +209,8 @@ class _SignUpPageState extends State<SignUpPage> {
             ),
           ),
         ),
+        // Added Bottom Navigation Bar
+        
       ),
     );
   }

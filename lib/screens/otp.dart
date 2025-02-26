@@ -64,8 +64,9 @@ class _OtpPageState extends State<OtpPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.menu, color: Colors.white),
-          onPressed: () {},
+          icon: Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () 
+            => Navigator.pop(context),
         ),
       ),
       body: Container(

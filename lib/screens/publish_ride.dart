@@ -11,6 +11,11 @@ class PublishRideScreen extends StatelessWidget {
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () 
+            => Navigator.pop(context),
+        ),
       ),
       body: Stack(
         children: [

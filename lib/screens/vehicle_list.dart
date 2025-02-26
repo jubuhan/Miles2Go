@@ -9,10 +9,13 @@ class VehicleListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Create the Ride'),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          color: Colors.black,
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: Stack(
         children: [

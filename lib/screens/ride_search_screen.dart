@@ -125,12 +125,20 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
   }
 
   Widget _buildPredictionsList(bool isFrom) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A3A4A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Publish Ride'),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () 
+            => Navigator.pop(context),
+        ),
       ),
-      child: Column(
+      body: Column(
+        
         children: [
           const Padding(
             padding: EdgeInsets.all(16),

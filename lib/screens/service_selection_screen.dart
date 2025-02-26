@@ -1,23 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:miles2go/screens/vehicle_list.dart';
-import 'ride_search_screen.dart'; // Add this import
+import 'ride_search_screen.dart';
 
-class ServiceSelectionScreen extends StatelessWidget {
+class ServiceSelectionScreen extends StatefulWidget {
   const ServiceSelectionScreen({Key? key}) : super(key: key);
+
+  @override
+  _ServiceSelectionScreenState createState() => _ServiceSelectionScreenState();
+}
+
+class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
+  int _selectedIndex = 2; // Set to 2 to highlight 'Rides' tab by default
+  
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+      
+      // Add navigation logic here if needed
+      // For demonstration, we're just updating the selected index
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1A3A4A),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.menu),
-          color: Colors.white,
-          onPressed: () {
-            // Implement menu functionality
-          },
+          icon: const Icon(Icons.arrow_back),
+          color: Colors.black,
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: SafeArea(
@@ -101,6 +115,33 @@ class ServiceSelectionScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+      // Added Bottom Navigation Bar
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.blue.shade900,
+        selectedItemColor: Colors.orange,
+        unselectedItemColor: Colors.white70,
+        items: const <BottomNavigationBarItem>[
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.search),
+            label: 'Search',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.directions_car),
+            label: 'Rides',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ],
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
       ),
     );
   }
