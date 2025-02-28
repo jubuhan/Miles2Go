@@ -25,7 +25,7 @@ class AddVehiclePage extends StatelessWidget {
             const Text(
               "ADD A NEW VEHICLE",
               style: TextStyle(
-                color: Colors.purple,
+                color: Colors.blue,
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
               ),
@@ -35,7 +35,7 @@ class AddVehiclePage extends StatelessWidget {
               "ADD DETAILS AS PER REGISTRATION CERTIFICATE",
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.black54,
+                color: Colors.black45,
                 fontSize: 14,
               ),
             ),
@@ -59,7 +59,7 @@ class AddVehiclePage extends StatelessWidget {
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple,
+                backgroundColor: Colors.blue,
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -78,7 +78,7 @@ class AddVehiclePage extends StatelessWidget {
               "Check the registered mobile number of RC for OTP",
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.black54,
+                color: Colors.black45,
                 fontSize: 12,
               ),
             ),
@@ -95,7 +95,7 @@ class AddVehiclePage extends StatelessWidget {
         obscureText: obscureText,
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: Colors.black),
+          labelStyle: const TextStyle(color: Colors.black54),
           filled: true,
           fillColor: Colors.grey.shade200,
           border: OutlineInputBorder(

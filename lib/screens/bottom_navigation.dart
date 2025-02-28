@@ -26,7 +26,7 @@ class Miles2GoBottomNav extends StatelessWidget {
       child: BottomNavigationBar(
         currentIndex: currentIndex,
         onTap: onTap,
-        backgroundColor: const Color(0xFF1A3A4A),
+        backgroundColor: Colors.blue,
         selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white.withOpacity(0.5),
         type: BottomNavigationBarType.fixed,

@@ -36,17 +36,13 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A3A4A),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Available Rides',
-          style: TextStyle(color: Colors.white),
         ),
       ),
       body: SafeArea(
@@ -60,7 +56,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -83,7 +79,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
               child: Text(
                 'Available Rides (${_getDummyRides().length})',
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: Colors.blue,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -131,14 +127,14 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
         Text(
           label,
           style: TextStyle(
-            color: Colors.white.withOpacity(0.7),
+            color: Colors.grey,
             fontSize: 14,
           ),
         ),
         Text(
           value,
           style: const TextStyle(
-            color: Colors.white,
+            color: Colors.black54,
             fontSize: 14,
             fontWeight: FontWeight.bold,
           ),
@@ -160,7 +156,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
+        color: Colors.grey.shade100,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -170,7 +166,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
           Row(
             children: [
               CircleAvatar(
-                backgroundColor: Colors.white24,
+                backgroundColor: Colors.grey.shade400,
                 child: Icon(Icons.person, color: Colors.white.withOpacity(0.8)),
               ),
               const SizedBox(width: 12),
@@ -181,9 +177,10 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
                     Text(
                       name,
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: Colors.black,
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w400,
+                        
                       ),
                     ),
                     Row(
@@ -192,14 +189,14 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
                         const SizedBox(width: 4),
                         Text(
                           rating,
-                          style: const TextStyle(color: Colors.white70),
+                          style: const TextStyle(color: Colors.black54),
                         ),
                         const SizedBox(width: 12),
-                        Icon(Icons.directions_car, color: Colors.white70, size: 16),
+                        Icon(Icons.directions_car, color: Colors.black54, size: 16),
                         const SizedBox(width: 4),
                         Text(
                           carModel,
-                          style: const TextStyle(color: Colors.white70),
+                          style: const TextStyle(color: Colors.black54),
                         ),
                       ],
                     ),
@@ -209,7 +206,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
               Text(
                 price,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: Colors.blue,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -223,21 +220,21 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.access_time, color: Colors.white70, size: 16),
+                  const Icon(Icons.access_time, color: Colors.black54, size: 16),
                   const SizedBox(width: 4),
                   Text(
                     '$startTime - $endTime',
-                    style: const TextStyle(color: Colors.white70),
+                    style: const TextStyle(color: Colors.black54),
                   ),
                 ],
               ),
               Row(
                 children: [
-                  const Icon(Icons.route, color: Colors.white70, size: 16),
+                  const Icon(Icons.route, color: Colors.black54, size: 16),
                   const SizedBox(width: 4),
                   Text(
                     distance,
-                    style: const TextStyle(color: Colors.white70),
+                    style: const TextStyle(color: Colors.black54),
                   ),
                 ],
               ),
@@ -262,7 +259,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
+                backgroundColor: Colors.blue,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -271,7 +268,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
               child: const Text(
                 'REQUEST RIDE',
                 style: TextStyle(
-                  color: Colors.black,
+                  color: Colors.white,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -285,7 +282,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
   List<Map<String, String>> _getDummyRides() {
     return [
       {
-        'name': 'Driver 1',
+        'name': 'JUBUHAN',
         'startTime': '8:30 AM',
         'endTime': '9:15 AM',
         'price': '₹110',
@@ -294,7 +291,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
         'carModel': 'Swift',
       },
       {
-        'name': 'Driver 2',
+        'name': 'AGNES',
         'startTime': '9:00 AM',
         'endTime': '9:45 AM',
         'price': '₹95',
@@ -303,7 +300,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
         'carModel': 'i20',
       },
       {
-        'name': 'Driver 3',
+        'name': 'VIVEK PS',
         'startTime': '9:30 AM',
         'endTime': '10:15 AM',
         'price': '₹105',

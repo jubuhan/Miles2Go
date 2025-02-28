@@ -37,11 +37,11 @@ class _WaitingConfirmationScreenState extends State<WaitingConfirmationScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF1A3A4A),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          color: Colors.black,
+          color: Colors.white,
           onPressed: () => Navigator.pop(context),
         ),
       ),

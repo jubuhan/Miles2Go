@@ -27,7 +27,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -39,13 +39,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
         children: [
           // Background gradient
           Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.blueGrey, Colors.deepPurple],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
+            color: Colors.white,
           ),
           Column(
             children: [
@@ -69,7 +63,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
                         },
                         child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.grey.shade200,
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
@@ -88,13 +82,15 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
                                 style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
+                                  color: Colors.black
                                 ),
+                                
                               ),
                               const SizedBox(height: 8),
-                              const Text('Vehicle Type: Car'),
-                              const Text('Vehicle Name: Bike'),
-                              const Text('No. of Seats: 4'),
-                              const Text('No. of Rides: 10'),
+                              const Text('Vehicle Type: Car', style: TextStyle(color: Colors.black54)),
+                              const Text('Vehicle Name: Bike', style: TextStyle(color: Colors.black54)),
+                              const Text('No. of Seats: 4', style: TextStyle(color: Colors.black54)),
+                              const Text('No. of Rides: 10', style: TextStyle(color: Colors.black54)),
                             ],
                           ),
                         ),
@@ -117,7 +113,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple,
+                    backgroundColor: Colors.blue,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),

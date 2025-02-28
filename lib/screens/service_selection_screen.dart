@@ -16,18 +16,15 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
-      
-      // Add navigation logic here if needed
-      // For demonstration, we're just updating the selected index
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A3A4A),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -39,22 +36,22 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 20),
-              const Text(
-                'SELECT A\nSERVICE',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  height: 1.2,
+              Expanded(
+                child: Center(
+                  child: Image.asset(
+                    'assets/images/ride_sharing.jpg', // Ensure this file is in your assets folder
+                    width: 300, // Adjust as needed
+                    height: 200, // Adjust as needed
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
-              const Spacer(),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 padding: const EdgeInsets.all(24),
@@ -62,14 +59,13 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
                   children: [
                     ElevatedButton(
                       onPressed: () {
-                        // Navigate to RideSearchScreen
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const VehicleListScreen()),
                         );
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4A1A70),
+                        backgroundColor: Colors.blue,
                         minimumSize: const Size(double.infinity, 50),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -87,14 +83,13 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () {
-                        // Navigate to RideSearchScreen
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const RideSearchScreen()),
                         );
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4A1A70),
+                        backgroundColor: Colors.blue,
                         minimumSize: const Size(double.infinity, 50),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -117,7 +112,6 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
           ),
         ),
       ),
-      // Using the reusable Bottom Navigation Bar
       bottomNavigationBar: Miles2GoBottomNav(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
