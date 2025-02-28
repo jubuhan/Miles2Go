@@ -1,9 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:miles2go/screens/publish_ride.dart';
 import 'add_vehicle_page.dart'; // Import AddVehiclePage
+import './bottom_navigation.dart'; // Import bottom nav widget
 
-class VehicleListScreen extends StatelessWidget {
+class VehicleListScreen extends StatefulWidget {
   const VehicleListScreen({super.key});
+
+  @override
+  State<VehicleListScreen> createState() => _VehicleListScreenState();
+}
+
+class _VehicleListScreenState extends State<VehicleListScreen> {
+  // Navigation state
+  int _selectedIndex = 2; // Set to 2 for Rides tab
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+    
+    // Add navigation logic here if needed
+    // For demonstration, we're just updating the selected index
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -121,6 +139,11 @@ class VehicleListScreen extends StatelessWidget {
             ],
           ),
         ],
+      ),
+      // Add the bottom navigation bar
+      bottomNavigationBar: Miles2GoBottomNav(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
       ),
     );
   }

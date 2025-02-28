@@ -1,7 +1,25 @@
 import 'package:flutter/material.dart';
+import './bottom_navigation.dart'; // Import bottom nav widget
 
-class PublishRideScreen extends StatelessWidget {
+class PublishRideScreen extends StatefulWidget {
   const PublishRideScreen({super.key});
+
+  @override
+  State<PublishRideScreen> createState() => _PublishRideScreenState();
+}
+
+class _PublishRideScreenState extends State<PublishRideScreen> {
+  // Navigation state
+  int _selectedIndex = 2; // Set to 2 for Rides tab
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+    
+    // Add navigation logic here if needed
+    // For demonstration, we're just updating the selected index
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,6 +118,11 @@ class PublishRideScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+      // Add the bottom navigation bar
+      bottomNavigationBar: Miles2GoBottomNav(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
       ),
     );
   }

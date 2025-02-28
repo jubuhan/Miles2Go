@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import './bottom_navigation.dart'; // Import bottom nav widget
 
-class WaitingConfirmationScreen extends StatelessWidget {
+class WaitingConfirmationScreen extends StatefulWidget {
   final String driverName;
   final String from;
   final String to;
@@ -13,6 +14,23 @@ class WaitingConfirmationScreen extends StatelessWidget {
     required this.to,
     required this.date,
   }) : super(key: key);
+
+  @override
+  State<WaitingConfirmationScreen> createState() => _WaitingConfirmationScreenState();
+}
+
+class _WaitingConfirmationScreenState extends State<WaitingConfirmationScreen> {
+  // Navigation state
+  int _selectedIndex = 1; // Set to 1 for Search tab
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+    
+    // Add navigation logic here if needed
+    // For demonstration, we're just updating the selected index
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +75,7 @@ class WaitingConfirmationScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                'Request sent to $driverName',
+                'Request sent to ${widget.driverName}',
                 style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 16,
@@ -84,11 +102,11 @@ class WaitingConfirmationScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _buildDetailRow('From', from),
+                    _buildDetailRow('From', widget.from),
                     const SizedBox(height: 8),
-                    _buildDetailRow('To', to),
+                    _buildDetailRow('To', widget.to),
                     const SizedBox(height: 8),
-                    _buildDetailRow('Date', date),
+                    _buildDetailRow('Date', widget.date),
                   ],
                 ),
               ),
@@ -120,6 +138,11 @@ class WaitingConfirmationScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+      // Add the bottom navigation bar
+      bottomNavigationBar: Miles2GoBottomNav(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
       ),
     );
   }

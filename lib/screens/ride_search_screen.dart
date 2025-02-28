@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -5,6 +6,7 @@ import 'package:google_place/google_place.dart';
 import 'dart:math' as math;
 import '../models/location_model.dart';
 import './available_rides_screen.dart';
+import './bottom_navigation.dart'; // Import the bottom nav widget
 
 class RideSearchScreen extends StatefulWidget {
   const RideSearchScreen({Key? key}) : super(key: key);
@@ -31,6 +33,9 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
   Set<Marker> _markers = {};
   List<AutocompletePrediction> _predictions = [];
   bool _isLoading = false;
+  
+  // Navigation state
+  int _currentNavIndex = 1; // Set to 1 for Search tab
 
   // Constants
   static const _defaultZoom = 15.0;
@@ -356,6 +361,42 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
     );
   }
 
+  void _handleNavigation(int index) {
+    if (index == _currentNavIndex) return;
+    
+    setState(() {
+      _currentNavIndex = index;
+    });
+    
+    // Navigate to the corresponding screen based on index
+    switch (index) {
+      case 0:
+        // Navigate to Home
+        // Navigator.pushReplacement(
+        //   context, 
+        //   MaterialPageRoute(builder: (context) => HomeScreen()),
+        // );
+        break;
+      case 1:
+        // Already on Search, do nothing
+        break;
+      case 2:
+        // Navigate to My Rides
+        // Navigator.pushReplacement(
+        //   context, 
+        //   MaterialPageRoute(builder: (context) => MyRidesScreen()),
+        // );
+        break;
+      case 3:
+        // Navigate to Profile
+        // Navigator.pushReplacement(
+        //   context, 
+        //   MaterialPageRoute(builder: (context) => ProfileScreen()),
+        // );
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -368,6 +409,10 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
             if (_predictions.isNotEmpty) _buildPredictionsList(),
           ],
         ),
+      ),
+      bottomNavigationBar: Miles2GoBottomNav(
+        currentIndex: _currentNavIndex,
+        onTap: _handleNavigation,
       ),
     );
   }

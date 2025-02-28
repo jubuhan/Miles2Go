@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:miles2go/screens/vehicle_list.dart';
+import './bottom_navigation.dart'; // Import the bottom nav widget
 import 'ride_search_screen.dart';
 
 class ServiceSelectionScreen extends StatefulWidget {
@@ -116,30 +117,8 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
           ),
         ),
       ),
-      // Added Bottom Navigation Bar
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.blue.shade900,
-        selectedItemColor: Colors.orange,
-        unselectedItemColor: Colors.white70,
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: 'Search',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.directions_car),
-            label: 'Rides',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+      // Using the reusable Bottom Navigation Bar
+      bottomNavigationBar: Miles2GoBottomNav(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
       ),

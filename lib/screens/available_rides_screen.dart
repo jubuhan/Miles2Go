@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'waiting_confirmation_screen.dart';
+import './bottom_navigation.dart'; // Import bottom nav widget
 
-class AvailableRidesScreen extends StatelessWidget {
+class AvailableRidesScreen extends StatefulWidget {
   final String from;
   final String to;
   final String date;
@@ -16,6 +17,23 @@ class AvailableRidesScreen extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<AvailableRidesScreen> createState() => _AvailableRidesScreenState();
+}
+
+class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
+  // Navigation state
+  int _selectedIndex = 1; // Set to 1 for Search tab
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+    
+    // Add navigation logic here if needed
+    // For demonstration, we're just updating the selected index
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1A3A4A),
@@ -23,7 +41,7 @@ class AvailableRidesScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
@@ -48,13 +66,13 @@ class AvailableRidesScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildJourneyDetail('From', from),
+                    _buildJourneyDetail('From', widget.from),
                     const SizedBox(height: 8),
-                    _buildJourneyDetail('To', to),
+                    _buildJourneyDetail('To', widget.to),
                     const SizedBox(height: 8),
-                    _buildJourneyDetail('Date', date),
+                    _buildJourneyDetail('Date', widget.date),
                     const SizedBox(height: 8),
-                    _buildJourneyDetail('Passengers', passengers),
+                    _buildJourneyDetail('Passengers', widget.passengers),
                   ],
                 ),
               ),
@@ -97,6 +115,11 @@ class AvailableRidesScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+      // Add the bottom navigation bar
+      bottomNavigationBar: Miles2GoBottomNav(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
       ),
     );
   }
@@ -231,9 +254,9 @@ class AvailableRidesScreen extends StatelessWidget {
                   MaterialPageRoute(
                     builder: (context) => WaitingConfirmationScreen(
                       driverName: name,
-                      from: from,
-                      to: to,
-                      date: date,
+                      from: widget.from,
+                      to: widget.to,
+                      date: widget.date,
                     ),
                   ),
                 );
