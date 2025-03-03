@@ -58,6 +58,14 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                  
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -77,7 +85,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Text(
-                'Available Rides (${_getDummyRides().length})',
+                'AVAILABLE RIDES (${_getDummyRides().length})',
                 style: const TextStyle(
                   color: Colors.blue,
                   fontSize: 18,
@@ -134,7 +142,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
         Text(
           value,
           style: const TextStyle(
-            color: Colors.black54,
+            color: Colors.black,
             fontSize: 14,
             fontWeight: FontWeight.bold,
           ),
@@ -158,7 +166,15 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
       decoration: BoxDecoration(
         color: Colors.grey.shade100,
         borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
       ),
+      
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -179,7 +195,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
                       style: const TextStyle(
                         color: Colors.black,
                         fontSize: 16,
-                        fontWeight: FontWeight.w400,
+                        fontWeight: FontWeight.bold,
                         
                       ),
                     ),

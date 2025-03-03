@@ -9,7 +9,7 @@ class OtpSuccessPage extends StatelessWidget {
     return 
        Scaffold(
          appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -18,28 +18,29 @@ class OtpSuccessPage extends StatelessWidget {
         ),
       ),
         extendBodyBehindAppBar: true,
+        backgroundColor: Colors.white,
         body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.blue.shade900,
-                Colors.teal.shade800,
-              ],
-            ),
-          ),
+          // decoration: BoxDecoration(
+          //   gradient: LinearGradient(
+          //     begin: Alignment.topCenter,
+          //     end: Alignment.bottomCenter,
+          //     colors: [
+          //       Colors.blue.shade900,
+          //       Colors.teal.shade800,
+          //     ],
+          //   ),
+          // ),
           child: SafeArea(
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text(
-                    'OTP Verified and Saved',
+                    'OTP VERIFIED AND SAVED',
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 20,
                       fontWeight: FontWeight.w500,
-                      color: Colors.white,
+                      color: Colors.black54,
                     ),
                   ),
                   const SizedBox(height: 30),
@@ -48,15 +49,15 @@ class OtpSuccessPage extends StatelessWidget {
                     height: 80,
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color: Colors.white,
+                        color: Colors.green,
                         width: 3,
                       ),
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.circular(100),
                     ),
                     child: const Icon(
                       Icons.check,
                       size: 50,
-                      color: Colors.white,
+                      color: Colors.green,
                     ),
                   ),
                   const SizedBox(height: 50),
@@ -72,7 +73,7 @@ class OtpSuccessPage extends StatelessWidget {
                               builder: (context) => const WalletSelectionPage()));
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
+                          backgroundColor: Colors.blue,
                           padding: const EdgeInsets.symmetric(vertical: 15),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -83,7 +84,7 @@ class OtpSuccessPage extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                            color: Colors.white,
                           ),
                         ),
                       ),

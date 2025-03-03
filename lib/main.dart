@@ -46,17 +46,8 @@ class _SignUpPageState extends State<SignUpPage> {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
+        backgroundColor: Colors.white,
         body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.blue.shade900,
-                Colors.teal.shade800,
-              ],
-            ),
-          ),
           child: SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -66,20 +57,27 @@ class _SignUpPageState extends State<SignUpPage> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text(
-                        'SIGN UP',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
+                      // const Text(
+                      //   'SIGN UP',
+                      //   style: TextStyle(
+                      //     fontSize: 28,
+                      //     fontWeight: FontWeight.bold,
+                      //     color: Colors.white,
+                      //   ),
+                      // ),
                       const SizedBox(height: 40),
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
+                          color: Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(15),
+                          boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                         ),
                         child: Column(
                           children: [
@@ -87,32 +85,32 @@ class _SignUpPageState extends State<SignUpPage> {
                               controller: _usernameController,
                               decoration: const InputDecoration(
                                 hintText: 'Username',
-                                prefixIcon: Icon(Icons.person, color: Colors.white70),
-                                hintStyle: TextStyle(color: Colors.white70),
+                                prefixIcon: Icon(Icons.person, color: Colors.black54),
+                                hintStyle: TextStyle(color: Colors.black54),
                                 enabledBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white70),
+                                  borderSide: BorderSide(color: Colors.black54),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white),
+                                  borderSide: BorderSide(color: Colors.black54),
                                 ),
                               ),
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Colors.black54),
                             ),
                             const SizedBox(height: 20),
                             TextFormField(
                               controller: _emailController,
                               decoration: const InputDecoration(
                                 hintText: 'Email ID',
-                                prefixIcon: Icon(Icons.email, color: Colors.white70),
-                                hintStyle: TextStyle(color: Colors.white70),
+                                prefixIcon: Icon(Icons.email, color: Colors.black54),
+                                hintStyle: TextStyle(color: Colors.black54),
                                 enabledBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white70),
+                                  borderSide: BorderSide(color: Colors.black54),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white),
+                                  borderSide: BorderSide(color: Colors.black54),
                                 ),
                               ),
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Colors.black54),
                             ),
                             const SizedBox(height: 20),
                             TextFormField(
@@ -120,16 +118,16 @@ class _SignUpPageState extends State<SignUpPage> {
                               obscureText: true,
                               decoration: const InputDecoration(
                                 hintText: 'New Password',
-                                prefixIcon: Icon(Icons.lock, color: Colors.white70),
-                                hintStyle: TextStyle(color: Colors.white70),
+                                prefixIcon: Icon(Icons.lock, color: Colors.black54),
+                                hintStyle: TextStyle(color: Colors.black54),
                                 enabledBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white70),
+                                  borderSide: BorderSide(color: Colors.black54),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white),
+                                  borderSide: BorderSide(color: Colors.black54),
                                 ),
                               ),
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Colors.black54),
                             ),
                             const SizedBox(height: 20),
                             TextFormField(
@@ -137,16 +135,16 @@ class _SignUpPageState extends State<SignUpPage> {
                               obscureText: true,
                               decoration: const InputDecoration(
                                 hintText: 'Confirm Password',
-                                prefixIcon: Icon(Icons.lock, color: Colors.white70),
-                                hintStyle: TextStyle(color: Colors.white70),
+                                prefixIcon: Icon(Icons.lock, color: Colors.black54),
+                                hintStyle: TextStyle(color: Colors.black54),
                                 enabledBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white70),
+                                  borderSide: BorderSide(color: Colors.black54),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white),
+                                  borderSide: BorderSide(color: Colors.black54),
                                 ),
                               ),
-                              style: const TextStyle(color: Colors.white),
+                              style: const TextStyle(color: Colors.black54),
                             ),
                             const SizedBox(height: 30),
                             SizedBox(
@@ -159,15 +157,16 @@ class _SignUpPageState extends State<SignUpPage> {
                                   }
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange,
+                                  backgroundColor: Colors.blue,
                                   padding: const EdgeInsets.symmetric(vertical: 15),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                 ),
                                 child: const Text(
-                                  'Create Account',
+                                  'CREATE ACCOUNT',
                                   style: TextStyle(
+                                    color: Colors.white,
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -183,7 +182,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         children: [
                           const Text(
                             'Already have an account? ',
-                            style: TextStyle(color: Colors.white70),
+                            style: TextStyle(color: Colors.black54),
                           ),
                           TextButton(
                             onPressed: () {
@@ -194,7 +193,7 @@ class _SignUpPageState extends State<SignUpPage> {
                             child: const Text(
                               'Log in',
                               style: TextStyle(
-                                color: Colors.orange,
+                                color: Colors.blue,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),

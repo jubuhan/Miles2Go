@@ -63,7 +63,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
                         },
                         child: Container(
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
+                            color: Colors.grey.shade100,
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(

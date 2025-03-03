@@ -45,7 +45,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
     return 
         Scaffold(
         appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -54,16 +54,16 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
         ),
       ),
         body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.blue.shade900,
-                Colors.teal.shade800,
-              ],
-            ),
-          ),
+          // decoration: BoxDecoration(
+          //   gradient: LinearGradient(
+          //     begin: Alignment.topCenter,
+          //     end: Alignment.bottomCenter,
+          //     colors: [
+          //       Colors.blue.shade900,
+          //       Colors.teal.shade800,
+          //     ],
+          //   ),
+          // ),
           child: SafeArea(
             child: Column(
               children: [
@@ -78,7 +78,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                           'Otp has been sent to your registered mail id',
                           style: TextStyle(
                             fontSize: 16,
-                            color: Colors.white,
+                            color: Colors.grey,
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -109,13 +109,13 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                                   enabledBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(15),
                                     borderSide: const BorderSide(
-                                      color: Colors.white30,
+                                      color: Colors.black,
                                     ),
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(15),
                                     borderSide: const BorderSide(
-                                      color: Colors.white,
+                                      color: Colors.grey,
                                     ),
                                   ),
                                 ),
@@ -140,17 +140,18 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                               // Verify OTP logic here
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange,
+                              backgroundColor: Colors.blue,
                               padding: const EdgeInsets.symmetric(vertical: 15),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
                             child: const Text(
-                              'Verify OTP',
+                              'VERIFY OTP',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
+                                color: Colors.white
                               ),
                             ),
                           ),

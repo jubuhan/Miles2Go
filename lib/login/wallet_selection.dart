@@ -75,63 +75,82 @@ class _WalletSelectionPageState extends State<WalletSelectionPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          color: Colors.black,
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      backgroundColor: Colors.white,
       body: Stack(
         children: [
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.blue.shade900,
-                  Colors.teal.shade800,
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title at the top
+                  // const Text(
+                  //   'CONNECT YOUR WALLET',
+                  //   style: TextStyle(
+                  //     fontSize: 25,
+                  //     fontWeight: FontWeight.bold,
+                  //     color: Colors.black,
+                  //   ),
+                  // ),
+                  
+                  // Expanded to push content to top and bottom
+                  Expanded(
+                    child: Center(
+                      // Image centered in the middle
+                      child: Image.asset(
+                        'assets/images/wallet_image.jpg',
+                        height: 300, // Increased height for better visibility
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                  
+                  // Container at the bottom
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                    ),
+                    child: Column(
+                      children: [
+                        _buildWalletOption(
+                          onTap: () => _handleWalletSelection('binance'),
+                          icon: Icons.currency_bitcoin,
+                          title: 'BINANCE',
+                          color: Colors.orange,
+                        ),
+                        const Divider(
+                          color: Colors.black54,
+                          height: 40,
+                        ),
+                        _buildWalletOption(
+                          onTap: () => _handleWalletSelection('bybit'),
+                          icon: Icons.account_balance_wallet,
+                          title: 'BYBIT',
+                          color: Colors.blue,
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
-              ),
-            ),
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'CONNECT YOUR WALLET',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 40),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: Column(
-                        children: [
-                          _buildWalletOption(
-                            onTap: () => _handleWalletSelection('binance'),
-                            icon: Icons.currency_bitcoin,
-                            title: 'Binance Wallet',
-                            color: Colors.orange,
-                          ),
-                          const Divider(
-                            color: Colors.white24,
-                            height: 40,
-                          ),
-                          _buildWalletOption(
-                            onTap: () => _handleWalletSelection('bybit'),
-                            icon: Icons.account_balance_wallet,
-                            title: 'BYBIT',
-                            color: Colors.blue,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ),
           ),
@@ -175,7 +194,7 @@ class _WalletSelectionPageState extends State<WalletSelectionPage> {
             Text(
               title,
               style: const TextStyle(
-                color: Colors.white,
+                color: Colors.black,
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
@@ -183,7 +202,7 @@ class _WalletSelectionPageState extends State<WalletSelectionPage> {
             const Spacer(),
             Icon(
               Icons.arrow_forward_ios,
-              color: Colors.white.withOpacity(0.5),
+              color: Colors.black54,
               size: 20,
             ),
           ],
