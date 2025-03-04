@@ -36,7 +36,7 @@ class OtpSuccessPage extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Text(
-                    'OTP VERIFIED AND SAVED',
+                    'Otp verified and saved',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w500,

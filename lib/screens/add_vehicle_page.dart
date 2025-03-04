@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'otp.dart';
+import 'otpLic.dart';
 
 class AddVehiclePage extends StatelessWidget {
   const AddVehiclePage({super.key});
@@ -27,12 +27,12 @@ class AddVehiclePage extends StatelessWidget {
               style: TextStyle(
                 color: Colors.blue,
                 fontSize: 24,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.normal,
               ),
             ),
             const SizedBox(height: 8),
             const Text(
-              "ADD DETAILS AS PER REGISTRATION CERTIFICATE",
+              "Add details as per registration certificate",
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.black45,
@@ -54,7 +54,7 @@ class AddVehiclePage extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => OtpPage(),
+                    builder: (context) => OtpLicensePage(),
                   ),
                 );
               },
@@ -70,6 +70,7 @@ class AddVehiclePage extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.white,
+                  fontWeight: FontWeight.bold
                 ),
               ),
             ),
@@ -97,10 +98,10 @@ class AddVehiclePage extends StatelessWidget {
           labelText: label,
           labelStyle: const TextStyle(color: Colors.black54),
           filled: true,
-          fillColor: Colors.grey.shade200,
-          border: OutlineInputBorder(
+          fillColor: Colors.white.withOpacity(0.1),
+          enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide.none,
+            borderSide: BorderSide(color: Colors.blue, width: 1.5),
           ),
         ),
         style: const TextStyle(color: Colors.black),

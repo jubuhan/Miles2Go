@@ -81,7 +81,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
                                 'KL10A00${index + 1}',
                                 style: const TextStyle(
                                   fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.normal,
                                   color: Colors.black
                                 ),
                                 

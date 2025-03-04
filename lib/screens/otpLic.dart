@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:miles2go/login/otp_success.dart';
 
-class OtpVerificationPage extends StatefulWidget {
-  const OtpVerificationPage({Key? key}) : super(key: key);
+class OtpLicensePage extends StatefulWidget {
+  const OtpLicensePage({Key? key}) : super(key: key);
 
   @override
   _OtpVerificationPageState createState() => _OtpVerificationPageState();
 }
 
-class _OtpVerificationPageState extends State<OtpVerificationPage> {
+class _OtpVerificationPageState extends State<OtpLicensePage> {
   final List<TextEditingController> _controllers = List.generate(
     4,
     (index) => TextEditingController(),
@@ -78,6 +78,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
   Widget build(BuildContext context) {
     return 
         Scaffold(
+         backgroundColor: Colors.white,
         appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -88,6 +89,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
         ),
       ),
         body: Container(
+          
           // decoration: BoxDecoration(
           //   gradient: LinearGradient(
           //     begin: Alignment.topCenter,
@@ -163,14 +165,14 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
                           child: ElevatedButton(
                             onPressed: () {
                               // Handle OTP verification
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                builder: (context) => const OtpSuccessPage(),
-                                ),
-                                );
-                              String otp = _controllers
-                                  .map((controller) => controller.text)
-                                  .join();
+                              // Navigator.of(context).push(
+                              //   MaterialPageRoute(
+                              //   builder: (context) => const OtpSuccessPage(),
+                              //   ),
+                              //   );
+                              // String otp = _controllers
+                              //     .map((controller) => controller.text)
+                              //     .join();
                               // Verify OTP logic here
                             },
                             style: ElevatedButton.styleFrom(

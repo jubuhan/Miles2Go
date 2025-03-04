@@ -65,6 +65,8 @@ flutter:
   assets:
     - assets/images/ride_sharing.jpg
     - assets/images/wallet_image.jpg
+    - assets/images/binance_logo.png
+    - assets/images/bybit.png
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see

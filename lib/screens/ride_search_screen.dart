@@ -315,8 +315,8 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
           data: ThemeData.dark().copyWith(
             colorScheme: const ColorScheme.dark(
               primary: Colors.white,
-              onPrimary: Color(0xFF1A3A4A),
-              surface: Color(0xFF1A3A4A),
+              onPrimary: Colors.blue,
+              surface: Colors.blue,
               onSurface: Colors.white,
             ),
           ),
@@ -400,7 +400,7 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A3A4A),
+      backgroundColor: Colors.blue,
       body: SafeArea(
         child: Stack(
           children: [
@@ -490,12 +490,14 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'SEARCH A RIDE',
-            style: TextStyle(
-              color: Colors.black54,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+          Center(
+            child: const Text(
+              'SEARCH A RIDE',
+              style: TextStyle(
+                color: Colors.blue,
+                fontSize: 24,
+                fontWeight: FontWeight.normal,
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -514,17 +516,18 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
   Widget _buildFromField() {
     return TextField(
       controller: _fromController,
-      style: const TextStyle(color: Colors.black),
+      style: const TextStyle(color: Colors.white),
       onChanged: (value) => _searchPlaces(value),
       onTap: () => setState(() => _predictions = []),
       decoration: InputDecoration(
-        hintText: 'From...',
-        hintStyle: TextStyle(color: Colors.black54),
+        
+        hintText: 'from...',
+        hintStyle: TextStyle(color: Colors.grey),
         filled: true,
-        fillColor: Colors.grey[100],
-        border: OutlineInputBorder(
+        fillColor: Colors.white.withOpacity(0.1),
+        enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: Colors.blue, width: 2.0)
         ),
         prefixIcon: const Icon(Icons.search, color: Colors.black54),
         suffixIcon: IconButton(
@@ -538,17 +541,18 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
   Widget _buildToField() {
     return TextField(
       controller: _toController,
-      style: const TextStyle(color: Colors.black),
+      style: const TextStyle(color: Colors.black54),
       onChanged: (value) => _searchPlaces(value),
       onTap: () => setState(() => _predictions = []),
       decoration: InputDecoration(
-        hintText: 'To...',
-        hintStyle: TextStyle(color: Colors.black54),
+        hintText: 'to...',
+        hintStyle: TextStyle(color: Colors.grey),
         filled: true,
-        fillColor: Colors.grey[100],
-        border: OutlineInputBorder(
+        fillColor: Colors.white.withOpacity(0.1),
+        enabledBorder: OutlineInputBorder(
+
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: Colors.blue, width: 2.0)
         ),
         prefixIcon: const Icon(Icons.search, color: Colors.black54),
         suffixIcon: IconButton(
@@ -563,7 +567,8 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
+        border: Border.all(color: Colors.blue,width: 2.0,),
+        color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -571,10 +576,10 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
           const Icon(Icons.people, color: Colors.black54),
           const SizedBox(width: 12),
           const Text(
-            'Passengers',
+            'passengers',
             style: TextStyle(
-              color: Colors.black54,
-              fontWeight: FontWeight.w500,
+              color: Colors.grey,
+              fontWeight: FontWeight.normal,
             ),
           ),
           const Spacer(),
@@ -635,7 +640,7 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
           itemBuilder: (context, index) {
             final prediction = _predictions[index];
             return ListTile(
-              leading: const Icon(Icons.location_on, color: Colors.black54),
+              leading: const Icon(Icons.location_on, color: Color(0xFF1A3A4A)),
               title: Text(
                 prediction.structuredFormatting?.mainText ?? prediction.description ?? '',
                 style: const TextStyle(
@@ -669,7 +674,8 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                border: Border.all(color: Colors.blue,width: 2.0,),
+                color: Colors.white.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -678,7 +684,7 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
                   Text(
                     _selectedDate ?? 'Select Date',
                     style: TextStyle(
-                      color: _selectedDate != null ? Colors.black54 : Colors.black54,
+                      color: _selectedDate != null ? Colors.black54 : Colors.grey,
                     ),
                   ),
                   const SizedBox(width: 8),

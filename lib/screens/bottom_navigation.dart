@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:miles2go/screens/ride_search_screen.dart';
+import 'package:miles2go/screens/service_selection_screen.dart';
 
 class Miles2GoBottomNav extends StatelessWidget {
   final int currentIndex;
@@ -25,7 +27,36 @@ class Miles2GoBottomNav extends StatelessWidget {
       ),
       child: BottomNavigationBar(
         currentIndex: currentIndex,
-        onTap: onTap,
+        onTap: (index) {
+          onTap(index);
+          // Navigate to the respective page when a tab is tapped
+          switch (index) {
+            case 0:
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const ServiceSelectionScreen()),
+              );
+              break;
+            case 1:
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const RideSearchScreen()),
+              );
+              break;
+            // case 2:
+            //   Navigator.pushReplacement(
+            //     context,
+            //     MaterialPageRoute(builder: (context) => const MyRidesPage()),
+            //   );
+            //   break;
+            // case 3:
+            //   Navigator.pushReplacement(
+            //     context,
+            //     MaterialPageRoute(builder: (context) => const ProfilePage()),
+            //   );
+            //   break;
+          }
+        },
         backgroundColor: Colors.blue,
         selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white.withOpacity(0.5),
