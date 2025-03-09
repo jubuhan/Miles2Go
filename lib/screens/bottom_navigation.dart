@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:miles2go/screens/profile_setting.dart';
 import 'package:miles2go/screens/ride_search_screen.dart';
 import 'package:miles2go/screens/service_selection_screen.dart';
 
@@ -49,12 +50,12 @@ class Miles2GoBottomNav extends StatelessWidget {
             //     MaterialPageRoute(builder: (context) => const MyRidesPage()),
             //   );
             //   break;
-            // case 3:
-            //   Navigator.pushReplacement(
-            //     context,
-            //     MaterialPageRoute(builder: (context) => const ProfilePage()),
-            //   );
-            //   break;
+             case 3:
+               Navigator.pushReplacement(
+                 context,
+                 MaterialPageRoute(builder: (context) =>  ProfileSettingsPage()),
+               );
+               break;
           }
         },
         backgroundColor: Colors.blue,

@@ -144,7 +144,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
           style: const TextStyle(
             color: Colors.black,
             fontSize: 14,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.normal,
           ),
         ),
       ],
@@ -195,7 +195,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
                       style: const TextStyle(
                         color: Colors.black,
                         fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.normal,
                         
                       ),
                     ),

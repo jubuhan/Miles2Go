@@ -496,7 +496,7 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
               style: TextStyle(
                 color: Colors.blue,
                 fontSize: 24,
-                fontWeight: FontWeight.normal,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ),
@@ -516,7 +516,7 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
   Widget _buildFromField() {
     return TextField(
       controller: _fromController,
-      style: const TextStyle(color: Colors.white),
+      style: const TextStyle(color: Colors.black54),
       onChanged: (value) => _searchPlaces(value),
       onTap: () => setState(() => _predictions = []),
       decoration: InputDecoration(
