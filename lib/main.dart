@@ -5,7 +5,11 @@ import 'package:miles2go/login/otp.dart';
 void main() {
   runApp(
     MaterialApp(
-    home: SignUpPage()) 
+    //initialRoute: '/login',
+    home: SignUpPage(),
+    routes: {
+      '/login': (context) => LoginPage(),},
+      ) 
   );
 }
 

@@ -11,11 +11,38 @@ class ProfileSettingsPage extends StatefulWidget {
 
 class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   int _selectedIndex = 2; // Set to 2 to highlight 'Rides' tab by default
-  
+
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  void _logout() {
+    // Implement logout functionality here
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Logout"),
+        content: const Text("Are you sure you want to logout?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+            Navigator.of(context).pushNamedAndRemoveUntil('../login/login.dart', (route) => false);
+              
+            },
+            child: const Text(
+              "Logout",
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -37,13 +64,6 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
             // Profile Header
             Container(
               padding: const EdgeInsets.all(16.0),
-              decoration: BoxDecoration(
-                //color: Colors.blue,
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(25),
-                  bottomRight: Radius.circular(25),
-                ),
-              ),
               child: Row(
                 children: [
                   CircleAvatar(
@@ -96,31 +116,36 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                   ),
                   const SizedBox(height: 10),
 
-                  _buildSettingsItem(Icons.location_on, "My Addresses",
-                      "Set shopping delivery address"),
-                  _buildSettingsItem(Icons.shopping_cart, "My Cart",
+                  _buildSettingsItem(Icons.notifications_active, "Notification",
+                      "Explore the notifications"),
+                  _buildSettingsItem(Icons.list_alt, "Terms & Conditions",
                       "Add, remove products and move to checkout"),
                   _buildSettingsItem(
-                      Icons.list_alt, "My Orders", "In-progress and Completed Orders"),
-                  _buildSettingsItem(Icons.account_balance, "Bank Account",
+                      Icons.share, "Refer & Earn", "In-progress and Completed Orders"),
+                  _buildSettingsItem(Icons.thumb_up, "Rate Miles2Go",
                       "Withdraw balance to registered bank account"),
-                  _buildSettingsItem(Icons.discount, "My Coupons",
-                      "List of all the discounted coupons"),
-                  _buildSettingsItem(
-                      Icons.notifications, "Notifications", "Set any kind of notification message"),
-                  _buildSettingsItem(Icons.lock, "Account Privacy",
-                      "Manage data usage and connected accounts"),
-                  
-                  const SizedBox(height: 20),
-                  // const Text(
-                  //   "App Settings",
-                  //   style: TextStyle(
-                  //     fontSize: 18,
-                  //     fontWeight: FontWeight.bold,
-                  //     color: Colors.white,
-                  //   ),
-                  // ),
                 ],
+              ),
+            ),
+
+            // Logout Button
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: ElevatedButton(
+                  onPressed: _logout,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white70,
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    "LOGOUT",
+                    style: TextStyle(fontSize: 16, color: Colors.red, fontWeight: FontWeight.bold),
+                  ),
+                ),
               ),
             ),
           ],
