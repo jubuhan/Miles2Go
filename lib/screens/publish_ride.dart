@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:google_place/google_place.dart';
-import 'dart:math' as math;
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import '../models/location_model.dart';
 import './bottom_navigation.dart';
+import '../services/location_service.dart';
+import '../widgets/location_widgets.dart';
 
 class PublishRideScreen extends StatefulWidget {
   const PublishRideScreen({super.key});
@@ -22,27 +20,21 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   final TextEditingController _toController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
   
-  // Location Services
-  late final GooglePlace _googlePlace;
-  Position? _currentPosition;
+  // Services
+  late final LocationService _locationService;
   
   // Location State
   LocationModel? _fromLocation;
   LocationModel? _toLocation;
   String? _selectedDate;
   Set<Marker> _markers = {};
-  Set<Polyline> _polylines = {}; // For storing route polylines
+  Set<Polyline> _polylines = {};
   List<AutocompletePrediction> _predictions = [];
   bool _isLoading = false;
-  bool _isLoadingRoute = false; // For route loading indicator
+  bool _isLoadingRoute = false;
   
   // Navigation state
   int _selectedIndex = 2; // Set to 2 for Rides tab
-
-  // Constants
-  static const _defaultZoom = 15.0;
-  static const _defaultMapPadding = 100.0;
-  static const _apiKey = 'AIzaSyA-qhXwh2ygO9JRbQ_22gc9WRf_Xp9Unow'; // Move to secure config
 
   // Route options
   List<Map<String, dynamic>> _availableRoutes = [];
@@ -54,87 +46,24 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     Colors.purple,
   ];
   
-  // Manual Google polyline decoder function
-  List<LatLng> _decodePolyline(String encoded) {
-    List<LatLng> poly = [];
-    int index = 0, len = encoded.length;
-    int lat = 0, lng = 0;
-
-    while (index < len) {
-      int b, shift = 0, result = 0;
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-      lat += dlat;
-
-      shift = 0;
-      result = 0;
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-      lng += dlng;
-
-      final p = LatLng((lat / 1E5).toDouble(), (lng / 1E5).toDouble());
-      poly.add(p);
-    }
-    return poly;
-  }
-
   @override
   void initState() {
     super.initState();
-    _googlePlace = GooglePlace(_apiKey);
+    _locationService = LocationService();
     _initializeLocation();
   }
 
   Future<void> _initializeLocation() async {
     setState(() => _isLoading = true);
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        _showError('Please enable location services');
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          _showError('Location permission denied');
-          setState(() => _isLoading = false);
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        _showError('Location permissions permanently denied');
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high
-      );
-      
-      if (mounted) {
-        setState(() {
-          _currentPosition = position;
-          _isLoading = false;
-          // We don't add a marker for current location
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _showError('Failed to initialize location: $e');
-      }
+    
+    final position = await _locationService.initializeLocation(_showError);
+    
+    if (position != null && mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    } else if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -156,29 +85,9 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   }
 
   Future<void> _searchPlaces(String query) async {
-    // Don't search if query is empty
-    if (query.isEmpty) {
-      setState(() => _predictions = []);
-      return;
-    }
-
-    // Search for places
-    try {
-      final result = await _googlePlace.autocomplete.get(query);
-      if (mounted) {
-        setState(() {
-          if (result != null && result.predictions != null) {
-            _predictions = result.predictions!;
-          } else {
-            _predictions = [];
-          }
-        });
-      }
-    } catch (e) {
-      debugPrint('Error searching places: $e');
-      if (mounted) {
-        setState(() => _predictions = []);
-      }
+    final predictions = await _locationService.searchPlaces(query);
+    if (mounted) {
+      setState(() => _predictions = predictions);
     }
   }
 
@@ -186,65 +95,48 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     AutocompletePrediction prediction,
     bool isOrigin,
   ) async {
-    try {
-      final details = await _googlePlace.details.get(prediction.placeId!);
-      if (details?.result == null || 
-          details!.result!.geometry?.location?.lat == null || 
-          details.result!.geometry?.location?.lng == null) {
-        _showError('Could not get location details');
-        return;
-      }
-
-      final lat = details.result!.geometry!.location!.lat!;
-      final lng = details.result!.geometry!.location!.lng!;
-      
-      final location = LocationModel(
-        name: prediction.description!,
-        latitude: lat,
-        longitude: lng,
-      );
-
-      setState(() {
-        if (isOrigin) {
-          _fromLocation = location;
-          _fromController.text = location.name;
-          _addMarker(
-            id: 'origin',
-            position: LatLng(lat, lng),
-            title: 'Pick-up Location'
-          );
-        } else {
-          _toLocation = location;
-          _toController.text = location.name;
-          _addMarker(
-            id: 'destination',
-            position: LatLng(lat, lng),
-            title: 'Drop-off Location'
-          );
-        }
-      });
-
-      if (_fromLocation != null && _toLocation != null) {
-        // Get routes when both locations are set
-        await _getRoutes();
-        _fitMapToBounds();
+    final location = await _locationService.getLocationFromPrediction(
+      prediction, 
+      _showError
+    );
+    
+    if (location == null) return;
+    
+    setState(() {
+      if (isOrigin) {
+        _fromLocation = location;
+        _fromController.text = location.name;
+        _addMarker(
+          id: 'origin',
+          position: LatLng(location.latitude, location.longitude),
+          title: 'Pick-up Location'
+        );
       } else {
-        _animateToLocation(lat, lng);
+        _toLocation = location;
+        _toController.text = location.name;
+        _addMarker(
+          id: 'destination',
+          position: LatLng(location.latitude, location.longitude),
+          title: 'Drop-off Location'
+        );
       }
+    });
 
-      // Clear the search results
-      setState(() => _predictions = []);
-    } catch (e) {
-      debugPrint('Error selecting location: $e');
-      _showError('Error selecting location');
+    if (_fromLocation != null && _toLocation != null) {
+      await _getRoutes();
+      _fitMapToBounds();
+    } else {
+      _animateToLocation(location.latitude, location.longitude);
     }
+
+    setState(() => _predictions = []);
   }
 
   void _animateToLocation(double lat, double lng) {
     _mapController?.animateCamera(
       CameraUpdate.newLatLngZoom(
         LatLng(lat, lng),
-        _defaultZoom,
+        LocationService.defaultZoom,
       ),
     );
   }
@@ -252,27 +144,13 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   void _fitMapToBounds() {
     if (_fromLocation == null || _toLocation == null) return;
 
-    final southwest = LatLng(
-      math.min(_fromLocation!.latitude, _toLocation!.latitude),
-      math.min(_fromLocation!.longitude, _toLocation!.longitude),
-    );
-    
-    final northeast = LatLng(
-      math.max(_fromLocation!.latitude, _toLocation!.latitude),
-      math.max(_fromLocation!.longitude, _toLocation!.longitude),
-    );
-    
-    final bounds = LatLngBounds(
-      southwest: southwest,
-      northeast: northeast,
-    );
+    final bounds = _locationService.getBounds(_fromLocation!, _toLocation!);
 
     _mapController?.animateCamera(
-      CameraUpdate.newLatLngBounds(bounds, _defaultMapPadding),
+      CameraUpdate.newLatLngBounds(bounds, LocationService.defaultMapPadding),
     );
   }
 
-  // Function to get routes between origin and destination
   Future<void> _getRoutes() async {
     if (_fromLocation == null || _toLocation == null) {
       return;
@@ -284,92 +162,48 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
       _availableRoutes = [];
     });
 
-    try {
-      // Make the HTTP request to the Directions API
-      final origin = '${_fromLocation!.latitude},${_fromLocation!.longitude}';
-      final destination = '${_toLocation!.latitude},${_toLocation!.longitude}';
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/directions/json?'
-        'origin=$origin&'
-        'destination=$destination&'
-        'alternatives=true&'
-        'key=$_apiKey'
-      );
+    final routes = await _locationService.getRoutes(
+      _fromLocation!, 
+      _toLocation!, 
+      _showError
+    );
 
-      final response = await http.get(url);
-      final data = json.decode(response.body);
-
-      if (data['status'] != 'OK') {
-        _showError('Could not get directions: ${data['status']}');
-        setState(() => _isLoadingRoute = false);
-        return;
-      }
-
-      // Parse routes
-      final routes = data['routes'] as List;
-      if (routes.isEmpty) {
-        _showError('No routes found');
-        setState(() => _isLoadingRoute = false);
-        return;
-      }
-
-      // Store route information
-      final newRoutes = <Map<String, dynamic>>[];
-      final newPolylines = <Polyline>{};
-
-      for (int i = 0; i < routes.length; i++) {
-        final route = routes[i];
-        final legs = route['legs'] as List;
-        final leg = legs[0];
-        
-        // Extract route info
-        final distance = leg['distance']['text'];
-        final duration = leg['duration']['text'];
-        // Get the encoded polyline points
-        final String encodedPolyline = route['overview_polyline']['points'];
-        
-        // Decode the polyline points manually
-        final List<LatLng> polylineCoordinates = _decodePolyline(encodedPolyline);
-
-        // Choose color for this route
-        final color = _routeColors[i % _routeColors.length];
-            
-        // Create a polyline for this route
-        final polyline = Polyline(
-          polylineId: PolylineId('route_$i'),
-          color: color,
-          points: polylineCoordinates,
-          width: i == _selectedRouteIndex ? 5 : 3,
-          patterns: i == _selectedRouteIndex 
-              ? [] 
-              : [PatternItem.dash(20), PatternItem.gap(10)],
-        );
-        
-        newPolylines.add(polyline);
-        
-        // Add route info to our list
-        newRoutes.add({
-          'index': i,
-          'distance': distance,
-          'duration': duration,
-          'summary': route['summary'],
-          'color': color,
-        });
-      }
-
-      setState(() {
-        _availableRoutes = newRoutes;
-        _polylines = newPolylines;
-        _isLoadingRoute = false;
-      });
-    } catch (e) {
-      debugPrint('Error getting routes: $e');
-      _showError('Error getting routes');
+    if (routes.isEmpty) {
       setState(() => _isLoadingRoute = false);
+      return;
     }
+
+    final newPolylines = <Polyline>{};
+
+    for (int i = 0; i < routes.length; i++) {
+      final route = routes[i];
+      final color = _routeColors[i % _routeColors.length];
+      
+      // Create a polyline for this route
+      final polylineCoordinates = _locationService.decodePolyline(route['points']);
+      final polyline = Polyline(
+        polylineId: PolylineId('route_$i'),
+        color: color,
+        points: polylineCoordinates,
+        width: i == _selectedRouteIndex ? 5 : 3,
+        patterns: i == _selectedRouteIndex 
+            ? [] 
+            : [PatternItem.dash(20), PatternItem.gap(10)],
+      );
+      
+      newPolylines.add(polyline);
+      
+      // Add color to our routes info
+      route['color'] = color;
+    }
+
+    setState(() {
+      _availableRoutes = routes;
+      _polylines = newPolylines;
+      _isLoadingRoute = false;
+    });
   }
 
-  // Update the polyline style when a different route is selected
   void _selectRoute(int index) {
     if (index >= _availableRoutes.length) return;
     
@@ -398,14 +232,15 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   }
 
   void _useCurrentLocation(bool isOrigin) async {
-    if (_currentPosition == null) {
+    if (_locationService.currentPosition == null) {
       _showError('Current location not available');
       return;
     }
 
     try {
-      final lat = _currentPosition!.latitude;
-      final lng = _currentPosition!.longitude;
+      final position = _locationService.currentPosition!;
+      final lat = position.latitude;
+      final lng = position.longitude;
       
       final location = LocationModel(
         name: 'Current Location',
@@ -509,7 +344,6 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     });
     
     // Add navigation logic here if needed
-    // For demonstration, we're just updating the selected index
   }
 
   @override
@@ -532,7 +366,13 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
           children: [
             _buildMap(),
             _buildPublishPanel(),
-            if (_predictions.isNotEmpty) _buildPredictionsList(),
+            if (_predictions.isNotEmpty) 
+              LocationWidgets.buildPredictionsList(
+                predictions: _predictions,
+                onSelect: _handleLocationSelect,
+                isOrigin: _fromController.selection.isValid,
+                top: 230,
+              ),
             if (_isLoadingRoute) _buildLoadingIndicator(),
           ],
         ),
@@ -545,24 +385,46 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   }
 
   Widget _buildMap() {
-    if (_currentPosition == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: Colors.white),
-      );
-    }
-
     return GoogleMap(
-      onMapCreated: (controller) => _mapController = controller,
+      onMapCreated: (controller) {
+        _mapController = controller;
+        // Apply a dark map style (optional)
+        _mapController?.setMapStyle('''
+          [
+            {
+              "featureType": "all",
+              "elementType": "labels.text.fill",
+              "stylers": [{"color": "#7c93a3"},{"lightness": "-10"}]
+            },
+            {
+              "featureType": "administrative.country",
+              "elementType": "geometry",
+              "stylers": [{"visibility": "on"}]
+            },
+            {
+              "featureType": "administrative.country",
+              "elementType": "geometry.stroke",
+              "stylers": [{"color": "#a0a4a5"}]
+            }
+          ]
+        ''');
+      },
       initialCameraPosition: CameraPosition(
-        target: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-        zoom: _defaultZoom,
+        target: _locationService.currentPosition != null 
+            ? LatLng(_locationService.currentPosition!.latitude, _locationService.currentPosition!.longitude)
+            : const LatLng(0, 0), // Default position will be updated once location is available
+        zoom: LocationService.defaultZoom,
       ),
       markers: _markers,
-      polylines: _polylines, // Add polylines to the map
-      myLocationEnabled: true, // Keep the blue dot for current location
-      myLocationButtonEnabled: true, // Keep the button to center on current location
+      polylines: _polylines,
+      myLocationEnabled: true,
+      myLocationButtonEnabled: true,
       mapToolbarEnabled: false,
+      mapType: MapType.normal,
+      compassEnabled: true,
       padding: const EdgeInsets.only(bottom: 300),
+      liteModeEnabled: false, // Set true for very slow devices
+      zoomControlsEnabled: false, // Hide default zoom controls for cleaner UI
     );
   }
 
@@ -630,7 +492,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildDragHandle(),
+                LocationWidgets.buildDragHandle(Colors.deepPurple),
                 if (_availableRoutes.isNotEmpty) _buildRouteSelector(),
                 _buildPublishContent(),
               ],
@@ -736,20 +598,6 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     );
   }
 
-  Widget _buildDragHandle() {
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 12),
-        width: 40,
-        height: 4,
-        decoration: BoxDecoration(
-          color: Colors.deepPurple,
-          borderRadius: BorderRadius.circular(2),
-        ),
-      ),
-    );
-  }
-
   Widget _buildPublishContent() {
     return Padding(
       padding: const EdgeInsets.all(24.0),
@@ -780,99 +628,35 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   }
 
   Widget _buildFromField() {
-    return TextField(
+    return LocationWidgets.buildLocationField(
       controller: _fromController,
-      style: const TextStyle(color: Colors.black),
+      hint: 'Your departure location',
       onChanged: (value) => _searchPlaces(value),
       onTap: () => setState(() => _predictions = []),
-      decoration: InputDecoration(
-        labelText: 'FROM WHERE:',
-        labelStyle: const TextStyle(
-          color: Colors.black54,
-          fontWeight: FontWeight.bold,
-        ),
-        hintText: 'Your departure location',
-        hintStyle: TextStyle(color: Colors.black54),
-        filled: true,
-        fillColor: Colors.grey[100],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
-        ),
-        prefixIcon: const Icon(Icons.location_on, color: Colors.black54),
-        suffixIcon: IconButton(
-          icon: const Icon(Icons.my_location, color: Colors.black54),
-          onPressed: () => _useCurrentLocation(true),
-        ),
-      ),
+      onCurrentLocation: () => _useCurrentLocation(true),
+      borderColor: const Color(0xFF1A3A4A),
+      prefixIcon: const Icon(Icons.location_on, color: Colors.black54),
     );
   }
 
   Widget _buildToField() {
-    return TextField(
+    return LocationWidgets.buildLocationField(
       controller: _toController,
-      style: const TextStyle(color: Colors.black),
+      hint: 'Your destination',
       onChanged: (value) => _searchPlaces(value),
       onTap: () => setState(() => _predictions = []),
-      decoration: InputDecoration(
-        labelText: 'WHERE TO:',
-        labelStyle: const TextStyle(
-          color: Colors.black54,
-          fontWeight: FontWeight.bold,
-        ),
-        hintText: 'Your destination',
-        hintStyle: TextStyle(color: Colors.black54),
-        filled: true,
-        fillColor: Colors.grey[100],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
-        ),
-        prefixIcon: const Icon(Icons.location_on, color: Colors.black54),
-        suffixIcon: IconButton(
-          icon: const Icon(Icons.place, color: Colors.black54),
-          onPressed: () {},
-        ),
-      ),
+      onCurrentLocation: () => _useCurrentLocation(false),
+      borderColor: const Color(0xFF1A3A4A),
+      prefixIcon: const Icon(Icons.location_on, color: Colors.black54),
+      suffixIcon: const Icon(Icons.place, color: Colors.black54),
     );
   }
 
   Widget _buildDateField() {
-    return GestureDetector(
+    return LocationWidgets.buildDateField(
+      selectedDate: _selectedDate,
       onTap: _selectDate,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'DATE OF DEPARTURE:',
-              style: TextStyle(
-                color: Colors.black54,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.calendar_today, color: Colors.black54),
-                const SizedBox(width: 12),
-                Text(
-                  _selectedDate ?? 'Select Date',
-                  style: TextStyle(
-                    color: _selectedDate != null ? Colors.black : Colors.black54,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+      borderColor: const Color(0xFF1A3A4A),
     );
   }
 
@@ -915,67 +699,6 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
         child: const Text(
           'PUBLISH RIDE',
           style: TextStyle(color: Colors.white, fontSize: 16),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPredictionsList() {
-    final focusedField = FocusScope.of(context).focusedChild;
-    final isFromFocused = _fromController.selection.isValid;
-    final isToFocused = _toController.selection.isValid;
-    
-    // Only show predictions when a field is focused
-    if (!isFromFocused && !isToFocused) return const SizedBox.shrink();
-    
-    // Determine if we're searching for origin or destination
-    final isOrigin = isFromFocused;
-    
-    return Positioned(
-      top: 230, // Adjust this value based on your UI
-      left: 0,
-      right: 0,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: ListView.separated(
-          shrinkWrap: true,
-          physics: const ClampingScrollPhysics(),
-          itemCount: _predictions.length,
-          separatorBuilder: (context, index) => const Divider(height: 1),
-          itemBuilder: (context, index) {
-            final prediction = _predictions[index];
-            return ListTile(
-              leading: const Icon(Icons.location_on, color: Colors.black54),
-              title: Text(
-                prediction.structuredFormatting?.mainText ?? prediction.description ?? '',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF1A3A4A),
-                ),
-              ),
-              subtitle: Text(
-                prediction.structuredFormatting?.secondaryText ?? '',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                ),
-              ),
-              onTap: () {
-                FocusScope.of(context).unfocus();
-                _handleLocationSelect(prediction, isOrigin);
-              },
-            );
-          },
         ),
       ),
     );
