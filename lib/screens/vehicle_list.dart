@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:miles2go/controller/rides_controller.dart';
 import 'package:miles2go/screens/publish_ride.dart';
+import 'package:miles2go/services/database_service.dart';
 import 'add_vehicle_page.dart'; // Import AddVehiclePage
 import './bottom_navigation.dart'; // Import bottom nav widget
 
@@ -13,6 +16,7 @@ class VehicleListScreen extends StatefulWidget {
 class _VehicleListScreenState extends State<VehicleListScreen> {
   // Navigation state
   int _selectedIndex = 2; // Set to 2 for Rides tab
+  RideController rideController = Get.put(RideController());
 
   void _onItemTapped(int index) {
     setState(() {
@@ -25,6 +29,7 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    //  DatabaseServices().getUserVehicles();
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -45,58 +50,70 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
             children: [
               // List of vehicles
               Expanded(
-                child: ListView.builder(
-                  itemCount: 2, // Number of vehicles
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0, vertical: 8.0),
-                      child: GestureDetector(
-                        onTap: () {
-                          // Navigate directly to PublishRideScreen when vehicle is tapped
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const PublishRideScreen(),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'KL10A00${index + 1}',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.normal,
-                                  color: Colors.black
+                child: Obx(
+                   () {
+                    return ListView.builder(
+                      itemCount: rideController.vehiclesList.length, // Number of vehicles
+                      itemBuilder: (context, index) {
+                        final vehicle = rideController.vehiclesList[index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16.0, vertical: 8.0),
+                          child: GestureDetector(
+                            onTap: () {
+                              // Navigate directly to PublishRideScreen when vehicle is tapped
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const PublishRideScreen(),
                                 ),
-                                
+                              );
+                            },
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 8),
-                              const Text('Vehicle Type: Car', style: TextStyle(color: Colors.black54)),
-                              const Text('Vehicle Name: Bike', style: TextStyle(color: Colors.black54)),
-                              const Text('No. of Seats: 4', style: TextStyle(color: Colors.black54)),
-                              const Text('No. of Rides: 10', style: TextStyle(color: Colors.black54)),
-                            ],
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Text(
+                                  //   'KL10A00${index + 1}',
+                                  //   style: const TextStyle(
+                                  //     fontSize: 18,
+                                  //     fontWeight: FontWeight.normal,
+                                  //     color: Colors.black
+                                  //   ),
+                                    
+                                  // ),
+                                  // const SizedBox(height: 8),
+                                  // const Text('Vehicle Type: Car', style: TextStyle(color: Colors.black54)),
+                                  // const Text('Vehicle Name: Bike', style: TextStyle(color: Colors.black54)),
+                                  // const Text('No. of Seats: 4', style: TextStyle(color: Colors.black54)),
+                                  // const Text('No. of Rides: 10', style: TextStyle(color: Colors.black54)),
+                                  
+                                   Text('plate: ${vehicle["plate"]}', style: TextStyle(color: Colors.black54)),
+                                   Text('reg id:  ${vehicle["regId"]}', style: TextStyle(color: Colors.black54)),
+                                   Text('model: ${vehicle["model"]}', style: TextStyle(color: Colors.black54)),
+                                   Text('vehicleName: ${vehicle["vehicleName"]}', style: TextStyle(color: Colors.black54)),
+                                   Text('vehicleType:  ${vehicle["vehicleType"]}', style: TextStyle(color: Colors.black54)),
+                                   Text('seats: ${vehicle["seats"]}', style: TextStyle(color: Colors.black54)),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     );
-                  },
+                  }
                 ),
               ),
               // Add new vehicle button

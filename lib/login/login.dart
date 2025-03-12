@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:miles2go/services/authservices.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -175,6 +176,7 @@ class _LoginPageState extends State<LoginPage> {
                           onPressed: () {
                             Navigator.pop(context);
                             // Handle navigation to sign up page
+                           
                           },
                           child: Text(
                             'Sign up',
@@ -195,4 +197,5 @@ class _LoginPageState extends State<LoginPage> {
     
     );
   }
+
 }

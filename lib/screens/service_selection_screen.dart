@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:miles2go/controller/rides_controller.dart';
 import 'package:miles2go/screens/vehicle_list.dart';
+import 'package:miles2go/services/database_service.dart';
 import './bottom_navigation.dart'; // Import the bottom nav widget
 import 'ride_search_screen.dart';
 
@@ -12,6 +15,8 @@ class ServiceSelectionScreen extends StatefulWidget {
 
 class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
   int _selectedIndex = 2; // Set to 2 to highlight 'Rides' tab by default
+
+  RideController rideController = Get.put(RideController());
   
   void _onItemTapped(int index) {
     setState(() {
@@ -58,7 +63,8 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
                 child: Column(
                   children: [
                     ElevatedButton(
-                      onPressed: () {
+                      onPressed: () async{
+                       rideController.vehiclesList.value = await DatabaseServices().getUserVehicles();
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const VehicleListScreen()),
