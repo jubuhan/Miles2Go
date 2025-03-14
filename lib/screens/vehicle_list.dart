@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:miles2go/controller/rides_controller.dart';
@@ -61,11 +62,13 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
                               horizontal: 16.0, vertical: 8.0),
                           child: GestureDetector(
                             onTap: () {
-                              // Navigate directly to PublishRideScreen when vehicle is tapped
+                              // Navigate to PublishRideScreen passing the selected vehicle
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => const PublishRideScreen(),
+                                  builder: (context) => PublishRideScreen(
+                                    selectedVehicle: vehicle,
+                                  ),
                                 ),
                               );
                             },
@@ -85,21 +88,6 @@ class _VehicleListScreenState extends State<VehicleListScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Text(
-                                  //   'KL10A00${index + 1}',
-                                  //   style: const TextStyle(
-                                  //     fontSize: 18,
-                                  //     fontWeight: FontWeight.normal,
-                                  //     color: Colors.black
-                                  //   ),
-                                    
-                                  // ),
-                                  // const SizedBox(height: 8),
-                                  // const Text('Vehicle Type: Car', style: TextStyle(color: Colors.black54)),
-                                  // const Text('Vehicle Name: Bike', style: TextStyle(color: Colors.black54)),
-                                  // const Text('No. of Seats: 4', style: TextStyle(color: Colors.black54)),
-                                  // const Text('No. of Rides: 10', style: TextStyle(color: Colors.black54)),
-                                  
                                    Text('PLATE: ${vehicle["plate"]}', style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w500)),
                                    Text('REG ID:  ${vehicle["regId"]}', style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w500)),
                                    Text('MODEL: ${vehicle["model"]}', style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w500)),

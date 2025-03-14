@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:google_place/google_place.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/location_model.dart';
 import './bottom_navigation.dart';
 import '../services/location_service.dart';
 import '../widgets/location_widgets.dart';
 
 class PublishRideScreen extends StatefulWidget {
-  const PublishRideScreen({super.key});
+  final Map<String, dynamic> selectedVehicle;
+  
+  const PublishRideScreen({
+    Key? key,
+    required this.selectedVehicle,
+  }) : super(key: key);
 
   @override
   State<PublishRideScreen> createState() => _PublishRideScreenState();
@@ -27,6 +34,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   LocationModel? _fromLocation;
   LocationModel? _toLocation;
   String? _selectedDate;
+  TimeOfDay? _selectedTime;
   Set<Marker> _markers = {};
   Set<Polyline> _polylines = {};
   List<AutocompletePrediction> _predictions = [];
@@ -38,7 +46,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
 
   // Route options
   List<Map<String, dynamic>> _availableRoutes = [];
-    int _passengerCount = 1;
+  int _passengerCount = 1;
   int _selectedRouteIndex = 0;
   List<Color> _routeColors = [
     Colors.blue,
@@ -52,6 +60,14 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     super.initState();
     _locationService = LocationService();
     _initializeLocation();
+    
+    // Set initial passenger count based on vehicle seats
+    if (widget.selectedVehicle.containsKey('seats')) {
+      final vehicleSeats = int.tryParse(widget.selectedVehicle['seats'].toString()) ?? 1;
+      setState(() {
+        _passengerCount = vehicleSeats > 1 ? vehicleSeats - 1 : 1; // -1 for the driver
+      });
+    }
   }
 
   Future<void> _initializeLocation() async {
@@ -205,6 +221,33 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     });
   }
 
+  List<LocationModel> getIntermediatePoints(Map<String, dynamic> route) {
+    // Get polyline points from the selected route
+    final polylineCoordinates = _locationService.decodePolyline(route['points']);
+    
+    // Extract intermediate points at regular intervals
+    List<LocationModel> intermediatePoints = [];
+    
+    // Skip first and last points as they are origin and destination
+    if (polylineCoordinates.length > 2) {
+      // Take points at regular intervals - adjust the step as needed
+      int step = polylineCoordinates.length ~/ 10; // Take about 10 points
+      if (step < 1) step = 1;
+      
+      for (int i = 1; i < polylineCoordinates.length - 1; i += step) {
+        intermediatePoints.add(
+          LocationModel(
+            name: "Waypoint ${intermediatePoints.length + 1}",
+            latitude: polylineCoordinates[i].latitude,
+            longitude: polylineCoordinates[i].longitude,
+          )
+        );
+      }
+    }
+    
+    return intermediatePoints;
+  }
+
   void _selectRoute(int index) {
     if (index >= _availableRoutes.length) return;
     
@@ -306,25 +349,133 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
       });
     }
   }
+  
+  Future<void> _selectTime() async {
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.white,
+              onPrimary: Color(0xFF1A3A4A),
+              surface: Color(0xFF1A3A4A),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
 
-  void _publishRide() {
-    if (_fromLocation == null || _toLocation == null || _selectedDate == null || _amountController.text.isEmpty) {
-      _showError('Please fill in all fields');
+    if (time != null) {
+      setState(() {
+        _selectedTime = time;
+      });
+    }
+  }
+
+  Future<String> _getUserName(String userId) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      
+      if (userDoc.exists && userDoc.data()!.containsKey('userName')) {
+        return userDoc.data()!['userName'];
+      }
+      return 'Unknown User';
+    } catch (e) {
+      print('Error fetching username: $e');
+      return 'Unknown User';
+    }
+  }
+
+  void _publishRide() async {
+    if (_fromLocation == null || _toLocation == null || 
+        _selectedDate == null || _selectedTime == null || _amountController.text.isEmpty) {
+      _showError('Please fill in all fields including time');
       return;
     }
 
-    // Here you would implement the ride publishing logic
-    _showSuccess('Your ride has been published successfully!');
-  }
+    if (_availableRoutes.isEmpty || _selectedRouteIndex >= _availableRoutes.length) {
+      _showError('No valid route selected');
+      return;
+    }
 
-  void _showError(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
-    );
+    try {
+      setState(() => _isLoading = true);
+      
+      // Get current user ID
+      final userId = FirebaseAuth.instance.currentUser!.uid;
+      
+      // Get the selected route
+      final selectedRoute = _availableRoutes[_selectedRouteIndex];
+      
+      // Extract intermediate points
+      final intermediatePoints = getIntermediatePoints(selectedRoute);
+      
+      // Create a new published ride document
+      await FirebaseFirestore.instance.collection('publishedRides').add({
+        // User information (by reference)
+        'userId': userId,
+        'userName': await _getUserName(userId),
+        
+        // Vehicle information (by reference)
+        'vehicleId': widget.selectedVehicle['id'] ?? '',
+        'vehicleDetails': {
+          'model': widget.selectedVehicle['model'] ?? '',
+          'plate': widget.selectedVehicle['plate'] ?? '',
+          'vehicleName': widget.selectedVehicle['vehicleName'] ?? '',
+          'vehicleType': widget.selectedVehicle['vehicleType'] ?? '',
+          'seats': widget.selectedVehicle['seats'] ?? '1',
+        },
+        
+        // Route information
+        'from': {
+          'name': _fromLocation!.name,
+          'latitude': _fromLocation!.latitude,
+          'longitude': _fromLocation!.longitude,
+        },
+        'to': {
+          'name': _toLocation!.name,
+          'latitude': _toLocation!.latitude,
+          'longitude': _toLocation!.longitude,
+        },
+        'intermediatePoints': intermediatePoints.map((point) => {
+          'name': point.name,
+          'latitude': point.latitude,
+          'longitude': point.longitude,
+        }).toList(),
+        
+        // Ride details
+        'date': _selectedDate,
+        'time': _selectedTime != null ? '${_selectedTime!.hour}:${_selectedTime!.minute.toString().padLeft(2, '0')}' : '',
+        'amount': double.tryParse(_amountController.text) ?? 0.0,
+        'passengerCount': _passengerCount,
+        'routeEncodedPolyline': selectedRoute['points'],
+        'routeSummary': selectedRoute['summary'],
+        'routeDistance': selectedRoute['distance'],
+        'routeDuration': selectedRoute['duration'],
+        
+        // Metadata
+        'createdAt': FieldValue.serverTimestamp(),
+        'status': 'active',
+        'bookedSeats': 0,
+        'availableSeats': _passengerCount,
+      });
+      
+      setState(() => _isLoading = false);
+      _showSuccess('Your ride has been published successfully!');
+      
+      // Navigate back to the previous screen
+      Navigator.pop(context);
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showError('Failed to publish ride: ${e.toString()}');
+    }
   }
 
   void _decrementPassengers() {
@@ -336,11 +487,26 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   }
 
   void _incrementPassengers() {
-    if (_passengerCount < 8) { // Common max limit for standard vehicles
+    // Get maximum seats from vehicle
+    final maxSeats = int.tryParse(widget.selectedVehicle['seats'].toString()) ?? 8;
+    // Allow one less than total (accounting for driver)
+    final passengerLimit = maxSeats > 1 ? maxSeats - 1 : 1;
+    
+    if (_passengerCount < passengerLimit) {
       setState(() {
         _passengerCount++;
       });
     }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 
   void _showSuccess(String message) {
@@ -367,7 +533,6 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        //title: const Text('Publish Ride'),
         centerTitle: true,
         backgroundColor:  Colors.transparent,
         foregroundColor: Colors.white,
@@ -377,7 +542,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      backgroundColor:  Colors.white,
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Stack(
           children: [
@@ -390,7 +555,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
                 isOrigin: _fromController.selection.isValid,
                 top: 230,
               ),
-            if (_isLoadingRoute) _buildLoadingIndicator(),
+            if (_isLoading || _isLoadingRoute) _buildLoadingIndicator(),
           ],
         ),
       ),
@@ -464,7 +629,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
               ),
             ],
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(
@@ -477,7 +642,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
               ),
               SizedBox(width: 10),
               Text(
-                'Loading routes...',
+                _isLoading ? 'Publishing ride...' : 'Loading routes...',
                 style: TextStyle(color: Color(0xFF1A3A4A)),
               ),
             ],
@@ -631,12 +796,17 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          // Show the selected vehicle
+          _buildSelectedVehicle(),
+          const SizedBox(height: 16),
           _buildFromField(),
           const SizedBox(height: 16),
           _buildToField(),
           const SizedBox(height: 16),
           _buildDateField(),
+          const SizedBox(height: 16),
+          _buildTimeField(),
           const SizedBox(height: 16),
           _buildAmountField(),
           const SizedBox(height: 16),
@@ -648,40 +818,94 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     );
   }
 
+  Widget _buildSelectedVehicle() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'SELECTED VEHICLE',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue[800],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.directions_car, color: Colors.blue[700]),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "${widget.selectedVehicle['vehicleName']} (${widget.selectedVehicle['model']})",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Plate: ${widget.selectedVehicle['plate']} • Type: ${widget.selectedVehicle['vehicleType']}",
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[700],
+            ),
+          ),
+          Text(
+            "Seats: ${widget.selectedVehicle['seats']}",
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[700],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFromField() {
-  return Container(
-    decoration: BoxDecoration(
-      color: Colors.grey[100], // Background color
-      borderRadius: BorderRadius.circular(8), // Optional rounded corners
-    ),
-    child: LocationWidgets.buildLocationField(
-      controller: _fromController,
-      hint: 'Your departure location',
-      onChanged: (value) => _searchPlaces(value),
-      onTap: () => setState(() => _predictions = []),
-      onCurrentLocation: () => _useCurrentLocation(true),
-      borderColor: Colors.transparent,
-      prefixIcon: const Icon(Icons.location_on, color: Colors.black54),
-    ),
-  );
-}
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: LocationWidgets.buildLocationField(
+        controller: _fromController,
+        hint: 'Your departure location',
+        onChanged: (value) => _searchPlaces(value),
+        onTap: () => setState(() => _predictions = []),
+        onCurrentLocation: () => _useCurrentLocation(true),
+        borderColor: Colors.transparent,
+        prefixIcon: const Icon(Icons.location_on, color: Colors.black54),
+      ),
+    );
+  }
 
   Widget _buildToField() {
     return Container(
-    decoration: BoxDecoration(
-      color: Colors.grey[100], // Background color
-      borderRadius: BorderRadius.circular(8), // Optional rounded corners
-    ),
-    child:  LocationWidgets.buildLocationField(
-      controller: _toController,
-      hint: 'Your destination',
-      onChanged: (value) => _searchPlaces(value),
-      onTap: () => setState(() => _predictions = []),
-      onCurrentLocation: () => _useCurrentLocation(false),
-      borderColor: Colors.transparent,
-      prefixIcon: const Icon(Icons.location_on, color: Colors.black54),
-      suffixIcon: const Icon(Icons.place, color: Colors.black54),
-    ),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: LocationWidgets.buildLocationField(
+        controller: _toController,
+        hint: 'Your destination',
+        onChanged: (value) => _searchPlaces(value),
+        onTap: () => setState(() => _predictions = []),
+        onCurrentLocation: () => _useCurrentLocation(false),
+        borderColor: Colors.transparent,
+        prefixIcon: const Icon(Icons.location_on, color: Colors.black54),
+        suffixIcon: const Icon(Icons.place, color: Colors.black54),
+      ),
     );
   }
 
@@ -689,8 +913,36 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     return LocationWidgets.buildDateField(
       selectedDate: _selectedDate,
       onTap: _selectDate,
-      borderColor:  Colors.transparent,
-      
+      borderColor: Colors.transparent,
+    );
+  }
+  
+  Widget _buildTimeField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: InkWell(
+        onTap: _selectTime,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.access_time, color: Colors.black54),
+              const SizedBox(width: 12),
+              Text(
+                _selectedTime != null 
+                    ? '${_selectedTime!.format(context)}' 
+                    : 'Select time',
+                style: TextStyle(
+                  color: _selectedTime != null ? Colors.black : Colors.black54,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -709,7 +961,6 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
         hintStyle: TextStyle(color: Colors.black54),
         filled: true,
         fillColor: Colors.grey[100],
-        
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide.none,
@@ -721,16 +972,16 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
 
   Widget _buildPassengersSelector() {
     return Container(
-    decoration: BoxDecoration(
-      color: Colors.grey[100], // Background color
-      borderRadius: BorderRadius.circular(8), // Optional rounded corners
-    ),
-    child:  LocationWidgets.buildPassengersSelector(
-      passengerCount: _passengerCount,
-      onDecrement: _decrementPassengers,
-      onIncrement: _incrementPassengers,
-      borderColor: Colors.transparent,
-    ),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: LocationWidgets.buildPassengersSelector(
+        passengerCount: _passengerCount,
+        onDecrement: _decrementPassengers,
+        onIncrement: _incrementPassengers,
+        borderColor: Colors.transparent,
+      ),
     );
   }
 

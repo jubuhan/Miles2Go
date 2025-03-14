@@ -4,7 +4,7 @@ import 'package:miles2go/controller/rides_controller.dart';
 import 'package:miles2go/screens/vehicle_list.dart';
 import 'package:miles2go/services/database_service.dart';
 import './bottom_navigation.dart'; // Import the bottom nav widget
-import 'ride_search_screen.dart';
+import 'package:miles2go/screens/ride_search_screen.dart';
 
 class ServiceSelectionScreen extends StatefulWidget {
   const ServiceSelectionScreen({Key? key}) : super(key: key);
@@ -15,6 +15,7 @@ class ServiceSelectionScreen extends StatefulWidget {
 
 class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
   int _selectedIndex = 2; // Set to 2 to highlight 'Rides' tab by default
+  bool _isLoading = false;
 
   RideController rideController = Get.put(RideController());
   
@@ -59,22 +60,44 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
                   color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),]
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
                 ),
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
                     ElevatedButton(
-                      onPressed: () async{
-                       rideController.vehiclesList.value = await DatabaseServices().getUserVehicles();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const VehicleListScreen()),
-                        );
+                      onPressed: _isLoading ? null : () async {
+                        setState(() {
+                          _isLoading = true;
+                        });
+                        try {
+                          // Load user vehicles
+                          rideController.vehiclesList.value = await DatabaseServices().getUserVehicles();
+                          
+                          // Navigate to VehicleListScreen (non-const)
+                          if (mounted) {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => VehicleListScreen()),
+                            );
+                          }
+                        } catch (e) {
+                          // Show error if needed
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error loading vehicles: $e')),
+                          );
+                        } finally {
+                          if (mounted) {
+                            setState(() {
+                              _isLoading = false;
+                            });
+                          }
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
@@ -83,21 +106,31 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: const Text(
-                        'CREATE RIDE',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: _isLoading 
+                        ? const SizedBox(
+                            width: 20, 
+                            height: 20, 
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            )
+                          )
+                        : const Text(
+                            'CREATE RIDE',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () {
+                        // Navigate to RideSearchScreen (non-const)
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const RideSearchScreen()),
+                          MaterialPageRoute(builder: (context) => RideSearchScreen()),
                         );
                       },
                       style: ElevatedButton.styleFrom(

@@ -40,10 +40,10 @@ class Miles2GoBottomNav extends StatelessWidget {
               break;
             case 1:
               Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => const RideSearchScreen()),
-              );
-              break;
+    context,
+    MaterialPageRoute(builder: (context) => RideSearchScreen()),  // Remove const
+  );
+  break;
             // case 2:
             //   Navigator.pushReplacement(
             //     context,
