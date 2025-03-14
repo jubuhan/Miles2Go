@@ -38,6 +38,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
 
   // Route options
   List<Map<String, dynamic>> _availableRoutes = [];
+    int _passengerCount = 1;
   int _selectedRouteIndex = 0;
   List<Color> _routeColors = [
     Colors.blue,
@@ -326,6 +327,22 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     );
   }
 
+  void _decrementPassengers() {
+    if (_passengerCount > 1) {
+      setState(() {
+        _passengerCount--;
+      });
+    }
+  }
+
+  void _incrementPassengers() {
+    if (_passengerCount < 8) { // Common max limit for standard vehicles
+      setState(() {
+        _passengerCount++;
+      });
+    }
+  }
+
   void _showSuccess(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -350,17 +367,17 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Publish Ride'),
+        //title: const Text('Publish Ride'),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1A3A4A),
+        backgroundColor:  Colors.transparent,
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      backgroundColor: const Color(0xFF1A3A4A),
+      backgroundColor:  Colors.white,
       body: SafeArea(
         child: Stack(
           children: [
@@ -492,7 +509,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                LocationWidgets.buildDragHandle(Colors.deepPurple),
+                LocationWidgets.buildDragHandle(Colors.blue),
                 if (_availableRoutes.isNotEmpty) _buildRouteSelector(),
                 _buildPublishContent(),
               ],
@@ -604,12 +621,14 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'PUBLISH A RIDE',
-            style: TextStyle(
-              color: Colors.black54,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+          Center(
+            child: const Text(
+              'PUBLISH A RIDE',
+              style: TextStyle(
+                color: Colors.blue,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -620,6 +639,8 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
           _buildDateField(),
           const SizedBox(height: 16),
           _buildAmountField(),
+          const SizedBox(height: 16),
+          _buildPassengersSelector(),
           const SizedBox(height: 24),
           _buildPublishButton(),
         ],
@@ -628,27 +649,39 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   }
 
   Widget _buildFromField() {
-    return LocationWidgets.buildLocationField(
+  return Container(
+    decoration: BoxDecoration(
+      color: Colors.grey[100], // Background color
+      borderRadius: BorderRadius.circular(8), // Optional rounded corners
+    ),
+    child: LocationWidgets.buildLocationField(
       controller: _fromController,
       hint: 'Your departure location',
       onChanged: (value) => _searchPlaces(value),
       onTap: () => setState(() => _predictions = []),
       onCurrentLocation: () => _useCurrentLocation(true),
-      borderColor: const Color(0xFF1A3A4A),
+      borderColor: Colors.transparent,
       prefixIcon: const Icon(Icons.location_on, color: Colors.black54),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildToField() {
-    return LocationWidgets.buildLocationField(
+    return Container(
+    decoration: BoxDecoration(
+      color: Colors.grey[100], // Background color
+      borderRadius: BorderRadius.circular(8), // Optional rounded corners
+    ),
+    child:  LocationWidgets.buildLocationField(
       controller: _toController,
       hint: 'Your destination',
       onChanged: (value) => _searchPlaces(value),
       onTap: () => setState(() => _predictions = []),
       onCurrentLocation: () => _useCurrentLocation(false),
-      borderColor: const Color(0xFF1A3A4A),
+      borderColor: Colors.transparent,
       prefixIcon: const Icon(Icons.location_on, color: Colors.black54),
       suffixIcon: const Icon(Icons.place, color: Colors.black54),
+    ),
     );
   }
 
@@ -656,7 +689,8 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     return LocationWidgets.buildDateField(
       selectedDate: _selectedDate,
       onTap: _selectDate,
-      borderColor: const Color(0xFF1A3A4A),
+      borderColor:  Colors.transparent,
+      
     );
   }
 
@@ -675,6 +709,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
         hintStyle: TextStyle(color: Colors.black54),
         filled: true,
         fillColor: Colors.grey[100],
+        
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide.none,
@@ -684,21 +719,36 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     );
   }
 
+  Widget _buildPassengersSelector() {
+    return Container(
+    decoration: BoxDecoration(
+      color: Colors.grey[100], // Background color
+      borderRadius: BorderRadius.circular(8), // Optional rounded corners
+    ),
+    child:  LocationWidgets.buildPassengersSelector(
+      passengerCount: _passengerCount,
+      onDecrement: _decrementPassengers,
+      onIncrement: _incrementPassengers,
+      borderColor: Colors.transparent,
+    ),
+    );
+  }
+
   Widget _buildPublishButton() {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
         onPressed: _publishRide,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.deepPurple,
+          backgroundColor: Colors.blue,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(25),
+            borderRadius: BorderRadius.circular(8),
           ),
           padding: const EdgeInsets.symmetric(vertical: 15),
         ),
         child: const Text(
           'PUBLISH RIDE',
-          style: TextStyle(color: Colors.white, fontSize: 16),
+          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
     );

@@ -289,7 +289,18 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue,
+      appBar: AppBar(
+        //title: const Text('Request Ride'),
+        //centerTitle: true,
+        backgroundColor:  Colors.transparent,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      backgroundColor:  Colors.white,
       body: SafeArea(
         child: Stack(
           children: [
@@ -409,34 +420,52 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
   }
 
   Widget _buildFromField() {
-    return LocationWidgets.buildLocationField(
+    return Container(
+    decoration: BoxDecoration(
+      color: Colors.grey[100], // Background color
+      borderRadius: BorderRadius.circular(8), // Optional rounded corners
+    ),
+    child:  LocationWidgets.buildLocationField(
       controller: _fromController,
-      hint: 'from...',
+      hint: 'your location',
       onChanged: (value) => _searchPlaces(value),
       onTap: () => setState(() => _predictions = []),
       onCurrentLocation: () => _useCurrentLocation(true),
-      borderColor: Colors.blue,
+      borderColor: Colors.transparent,
+    ),
     );
   }
 
   Widget _buildToField() {
-    return LocationWidgets.buildLocationField(
+    return Container(
+    decoration: BoxDecoration(
+      color: Colors.grey[100], // Background color
+      borderRadius: BorderRadius.circular(8), // Optional rounded corners
+    ),
+    child:  LocationWidgets.buildLocationField(
       controller: _toController,
-      hint: 'to...',
+      hint: 'destination location',
       onChanged: (value) => _searchPlaces(value),
       onTap: () => setState(() => _predictions = []),
       onCurrentLocation: () => _useCurrentLocation(false),
-      borderColor: Colors.blue,
+      borderColor: Colors.transparent,
       suffixIcon: const Icon(Icons.place, color: Colors.black54),
+    ),
     );
   }
 
-  Widget _buildPassengersSelector() {
-    return LocationWidgets.buildPassengersSelector(
+Widget _buildPassengersSelector() {
+    return Container(
+    decoration: BoxDecoration(
+      color: Colors.grey[100], // Background color
+      borderRadius: BorderRadius.circular(8), // Optional rounded corners
+    ),
+    child:  LocationWidgets.buildPassengersSelector(
       passengerCount: _passengerCount,
       onDecrement: _decrementPassengers,
       onIncrement: _incrementPassengers,
-      borderColor: Colors.blue,
+      borderColor: Colors.transparent,
+    ),
     );
   }
 
@@ -449,21 +478,20 @@ class _RideSearchScreenState extends State<RideSearchScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.blue, width: 2.0),
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.grey[100],
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                  const Icon(Icons.calendar_today, color: Colors.black54),
+                  const SizedBox(width: 8),
                   Text(
                     _selectedDate ?? 'Select Date',
                     style: TextStyle(
                       color: _selectedDate != null ? Colors.black54 : Colors.grey,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.calendar_today, color: Colors.black54),
                 ],
               ),
             ),

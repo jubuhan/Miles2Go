@@ -58,6 +58,12 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen> {
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),]
                 ),
                 padding: const EdgeInsets.all(24),
                 child: Column(
