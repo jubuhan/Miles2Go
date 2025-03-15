@@ -5,6 +5,7 @@ import 'package:google_place/google_place.dart';
 import 'dart:math' as math;
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+// import 'package:geocoding/geocoding.dart';
 import '../models/location_model.dart';
 
 class LocationService {
@@ -132,6 +133,36 @@ class LocationService {
     );
   }
   
+  // Calculate bounds for multiple points
+  LatLngBounds getBoundsForMultipleLocations(List<LocationModel> locations) {
+    if (locations.isEmpty) {
+      // Default bounds if no locations
+      return LatLngBounds(
+        southwest: LatLng(0, 0),
+        northeast: LatLng(0, 0),
+      );
+    }
+    
+    // Start with the first location
+    double minLat = locations.first.latitude;
+    double maxLat = locations.first.latitude;
+    double minLng = locations.first.longitude;
+    double maxLng = locations.first.longitude;
+    
+    // Find min and max values
+    for (var location in locations) {
+      if (location.latitude < minLat) minLat = location.latitude;
+      if (location.latitude > maxLat) maxLat = location.latitude;
+      if (location.longitude < minLng) minLng = location.longitude;
+      if (location.longitude > maxLng) maxLng = location.longitude;
+    }
+    
+    return LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+  }
+  
   // Get routes between two locations
   Future<List<Map<String, dynamic>>> getRoutes(
     LocationModel from, 
@@ -184,6 +215,138 @@ class LocationService {
       debugPrint('Error getting routes: $e');
       onError('Error getting routes');
       return [];
+    }
+  }
+  
+  // Get routes with waypoints between two locations
+  Future<Map<String, dynamic>?> getRouteWithWaypoints(
+    LocationModel from,
+    LocationModel to,
+    List<LocationModel> waypoints,
+    Function(String) onError,
+  ) async {
+    try {
+      final origin = '${from.latitude},${from.longitude}';
+      final destination = '${to.latitude},${to.longitude}';
+      
+      // Format waypoints string
+      // Don't use via: prefix to ensure the waypoints are actually included in the route
+      // Use optimize:true to let Google reorder waypoints for the most efficient route
+      final waypointsParam = 'optimize:true|' + waypoints.map((wp) => 
+        '${wp.latitude},${wp.longitude}'
+      ).join('|');
+
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/directions/json?'
+        'origin=$origin&'
+        'destination=$destination&'
+        'waypoints=$waypointsParam&'
+        'key=$apiKey'
+      );
+
+      final response = await http.get(url);
+      final data = json.decode(response.body);
+
+      if (data['status'] != 'OK') {
+        if (data['status'] == 'ZERO_RESULTS') {
+          onError('One or more stops are not reachable by road. Try moving them closer to a road.');
+        } else {
+          onError('Could not get directions with waypoints: ${data['status']}');
+        }
+        return null;
+      }
+
+      final routes = data['routes'] as List;
+      if (routes.isEmpty) {
+        onError('No routes found with waypoints');
+        return null;
+      }
+
+      // Get the first (and likely only) route with waypoints
+      final route = routes[0];
+      final legs = route['legs'] as List;
+      
+      // Get the waypoint order if provided
+      List<int>? waypointOrder;
+      if (route.containsKey('waypoint_order')) {
+        waypointOrder = List<int>.from(route['waypoint_order']);
+      }
+      
+      // Calculate total distance and duration
+      double distanceMeters = 0;
+      double durationSeconds = 0;
+      
+      for (var leg in legs) {
+        distanceMeters += leg['distance']['value'];
+        durationSeconds += leg['duration']['value'];
+      }
+      
+      // Format the totals
+      final totalDistance = legs.length == 1 ? 
+        legs[0]['distance']['text'] : 
+        _formatDistance(distanceMeters);
+        
+      final totalDuration = legs.length == 1 ? 
+        legs[0]['duration']['text'] : 
+        _formatDuration(durationSeconds);
+      
+      return {
+        'index': 0,
+        'distance': totalDistance,
+        'duration': totalDuration,
+        'summary': route['summary'] ?? 'Route with stops',
+        'points': route['overview_polyline']['points'],
+        'waypointOrder': waypointOrder,
+      };
+    } catch (e) {
+      debugPrint('Error getting routes with waypoints: $e');
+      onError('Error getting routes with waypoints');
+      return null;
+    }
+  }
+  
+  // Helper method to format distance
+  String _formatDistance(double meters) {
+    if (meters < 1000) {
+      return '${meters.round()} m';
+    } else {
+      return '${(meters / 1000).toStringAsFixed(1)} km';
+    }
+  }
+  
+  // Helper method to format duration
+  String _formatDuration(double seconds) {
+    final Duration duration = Duration(seconds: seconds.round());
+    if (duration.inHours > 0) {
+      return '${duration.inHours} hr ${duration.inMinutes.remainder(60)} min';
+    } else {
+      return '${duration.inMinutes} min';
+    }
+  }
+  
+  // Get address from lat-lng coordinates using Google Places API
+  Future<String?> getAddressFromLatLng(LatLng position) async {
+    try {
+      // Use the Google Places API to get a nearby address
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/geocode/json?'
+        'latlng=${position.latitude},${position.longitude}&'
+        'key=$apiKey'
+      );
+      
+      final response = await http.get(url);
+      final data = json.decode(response.body);
+      
+      if (data['status'] == 'OK' && data['results'] != null && data['results'].isNotEmpty) {
+        // Get the first result which should be the most accurate
+        final address = data['results'][0]['formatted_address'];
+        return address ?? 'Custom Stop';
+      }
+      
+      return 'Custom Stop';
+    } catch (e) {
+      debugPrint('Error getting address: $e');
+      return 'Custom Stop';
     }
   }
   

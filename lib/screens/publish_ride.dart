@@ -26,6 +26,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   final TextEditingController _fromController = TextEditingController();
   final TextEditingController _toController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
+  final TextEditingController _stopController = TextEditingController();
   
   // Services
   late final LocationService _locationService;
@@ -33,6 +34,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   // Location State
   LocationModel? _fromLocation;
   LocationModel? _toLocation;
+  List<LocationModel> _stops = []; // User-selected intermediate stops
   String? _selectedDate;
   TimeOfDay? _selectedTime;
   Set<Marker> _markers = {};
@@ -40,6 +42,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   List<AutocompletePrediction> _predictions = [];
   bool _isLoading = false;
   bool _isLoadingRoute = false;
+  bool _isAddingStop = false; // Flag to indicate stop-adding mode
   
   // Navigation state
   int _selectedIndex = 2; // Set to 2 for Rides tab
@@ -88,17 +91,42 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     required String id,
     required LatLng position,
     required String title,
+    BitmapDescriptor? icon,
   }) {
     final marker = Marker(
       markerId: MarkerId(id),
       position: position,
       infoWindow: InfoWindow(title: title),
+      icon: icon ?? BitmapDescriptor.defaultMarker,
+      draggable: id.startsWith('stop_'), // Only stops are draggable
+      onDragEnd: id.startsWith('stop_') 
+        ? (newPosition) => _updateStopPosition(id, newPosition) 
+        : null,
     );
 
     setState(() {
       _markers.removeWhere((m) => m.markerId.value == id);
       _markers.add(marker);
     });
+  }
+
+  // Update stop position after dragging
+  void _updateStopPosition(String markerId, LatLng newPosition) {
+    // Extract the stop index from markerId (assuming format "stop_X")
+    final index = int.tryParse(markerId.split('_')[1]);
+    if (index != null && index < _stops.length) {
+      setState(() {
+        // Update the stop with the new position
+        _stops[index] = LocationModel(
+          name: _stops[index].name,
+          latitude: newPosition.latitude,
+          longitude: newPosition.longitude,
+        );
+      });
+      
+      // Recalculate routes with the updated stop
+      _getRoutes();
+    }
   }
 
   Future<void> _searchPlaces(String query) async {
@@ -120,13 +148,25 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     if (location == null) return;
     
     setState(() {
-      if (isOrigin) {
+      if (_isAddingStop) {
+        // Add as a stop
+        _stops.add(location);
+        _stopController.clear();
+        _addMarker(
+          id: 'stop_${_stops.length - 1}',
+          position: LatLng(location.latitude, location.longitude),
+          title: 'Stop ${_stops.length}',
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        );
+        _isAddingStop = false;
+      } else if (isOrigin) {
         _fromLocation = location;
         _fromController.text = location.name;
         _addMarker(
           id: 'origin',
           position: LatLng(location.latitude, location.longitude),
-          title: 'Pick-up Location'
+          title: 'Pick-up Location',
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
         );
       } else {
         _toLocation = location;
@@ -134,7 +174,8 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
         _addMarker(
           id: 'destination',
           position: LatLng(location.latitude, location.longitude),
-          title: 'Drop-off Location'
+          title: 'Drop-off Location',
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
         );
       }
     });
@@ -161,7 +202,12 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   void _fitMapToBounds() {
     if (_fromLocation == null || _toLocation == null) return;
 
-    final bounds = _locationService.getBounds(_fromLocation!, _toLocation!);
+    // Create a list of all points to include in bounds
+    List<LocationModel> allLocations = [_fromLocation!, _toLocation!];
+    allLocations.addAll(_stops);
+
+    // Calculate bounds that include all points
+    final bounds = _locationService.getBoundsForMultipleLocations(allLocations);
 
     _mapController?.animateCamera(
       CameraUpdate.newLatLngBounds(bounds, LocationService.defaultMapPadding),
@@ -179,73 +225,143 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
       _availableRoutes = [];
     });
 
-    final routes = await _locationService.getRoutes(
-      _fromLocation!, 
-      _toLocation!, 
-      _showError
-    );
+    // If there are stops, use waypoints routing
+    if (_stops.isNotEmpty) {
+      final route = await _locationService.getRouteWithWaypoints(
+        _fromLocation!,
+        _toLocation!,
+        _stops,
+        _showError,
+      );
 
-    if (routes.isEmpty) {
-      setState(() => _isLoadingRoute = false);
-      return;
-    }
+      if (route == null) {
+        setState(() => _isLoadingRoute = false);
+        return;
+      }
 
-    final newPolylines = <Polyline>{};
+      // Add color to our route
+      route['color'] = _routeColors[0];
 
-    for (int i = 0; i < routes.length; i++) {
-      final route = routes[i];
-      final color = _routeColors[i % _routeColors.length];
-      
       // Create a polyline for this route
       final polylineCoordinates = _locationService.decodePolyline(route['points']);
       final polyline = Polyline(
-        polylineId: PolylineId('route_$i'),
-        color: color,
+        polylineId: PolylineId('route_0'),
+        color: _routeColors[0],
         points: polylineCoordinates,
-        width: i == _selectedRouteIndex ? 5 : 3,
-        patterns: i == _selectedRouteIndex 
-            ? [] 
-            : [PatternItem.dash(20), PatternItem.gap(10)],
+        width: 5,
       );
-      
-      newPolylines.add(polyline);
-      
-      // Add color to our routes info
-      route['color'] = color;
-    }
 
+      // If the API returned a waypoint order, reorder the stops
+      if (route.containsKey('waypointOrder') && route['waypointOrder'] != null) {
+        List<int> waypointOrder = List<int>.from(route['waypointOrder']);
+        List<LocationModel> reorderedStops = [];
+        
+        // Create a new ordered list based on the waypoint_order
+        for (int i = 0; i < waypointOrder.length; i++) {
+          int originalIndex = waypointOrder[i];
+          if (originalIndex < _stops.length) {
+            reorderedStops.add(_stops[originalIndex]);
+          }
+        }
+        
+        // Replace stops with reordered stops if we got all of them
+        if (reorderedStops.length == _stops.length) {
+          setState(() {
+            _stops = reorderedStops;
+            
+            // Recreate markers to update the numbering
+            for (int i = 0; i < _stops.length; i++) {
+              _markers.removeWhere((m) => m.markerId.value == 'stop_$i');
+              _addMarker(
+                id: 'stop_$i',
+                position: LatLng(_stops[i].latitude, _stops[i].longitude),
+                title: 'Stop ${i + 1}',
+                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+              );
+            }
+          });
+        }
+      }
+
+      setState(() {
+        _availableRoutes = [route];
+        _polylines = {polyline};
+        _selectedRouteIndex = 0;
+        _isLoadingRoute = false;
+      });
+    } else {
+      // Original behavior - get multiple routes without stops
+      final routes = await _locationService.getRoutes(
+        _fromLocation!,
+        _toLocation!,
+        _showError,
+      );
+
+      if (routes.isEmpty) {
+        setState(() => _isLoadingRoute = false);
+        return;
+      }
+
+      final newPolylines = <Polyline>{};
+
+      for (int i = 0; i < routes.length; i++) {
+        final route = routes[i];
+        final color = _routeColors[i % _routeColors.length];
+        
+        // Create a polyline for this route
+        final polylineCoordinates = _locationService.decodePolyline(route['points']);
+        final polyline = Polyline(
+          polylineId: PolylineId('route_$i'),
+          color: color,
+          points: polylineCoordinates,
+          width: i == _selectedRouteIndex ? 5 : 3,
+          patterns: i == _selectedRouteIndex 
+              ? [] 
+              : [PatternItem.dash(20), PatternItem.gap(10)],
+        );
+        
+        newPolylines.add(polyline);
+        
+        // Add color to our routes info
+        route['color'] = color;
+      }
+
+      setState(() {
+        _availableRoutes = routes;
+        _polylines = newPolylines;
+        _isLoadingRoute = false;
+      });
+    }
+  }
+
+  void _addStop() {
     setState(() {
-      _availableRoutes = routes;
-      _polylines = newPolylines;
-      _isLoadingRoute = false;
+      _isAddingStop = true;
+      _stopController.clear();
     });
   }
 
-  List<LocationModel> getIntermediatePoints(Map<String, dynamic> route) {
-    // Get polyline points from the selected route
-    final polylineCoordinates = _locationService.decodePolyline(route['points']);
-    
-    // Extract intermediate points at regular intervals
-    List<LocationModel> intermediatePoints = [];
-    
-    // Skip first and last points as they are origin and destination
-    if (polylineCoordinates.length > 2) {
-      // Take points at regular intervals - adjust the step as needed
-      int step = polylineCoordinates.length ~/ 10; // Take about 10 points
-      if (step < 1) step = 1;
+  void _removeStop(int index) {
+    setState(() {
+      _stops.removeAt(index);
+      _markers.removeWhere((m) => m.markerId.value == 'stop_$index');
       
-      for (int i = 1; i < polylineCoordinates.length - 1; i += step) {
-        intermediatePoints.add(
-          LocationModel(
-            name: "Waypoint ${intermediatePoints.length + 1}",
-            latitude: polylineCoordinates[i].latitude,
-            longitude: polylineCoordinates[i].longitude,
-          )
+      // Renumber remaining stops
+      for (int i = index; i < _stops.length; i++) {
+        _markers.removeWhere((m) => m.markerId.value == 'stop_${i+1}');
+        _addMarker(
+          id: 'stop_$i',
+          position: LatLng(_stops[i].latitude, _stops[i].longitude),
+          title: 'Stop ${i+1}',
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
         );
       }
-    }
+    });
     
-    return intermediatePoints;
+    // Recalculate routes without this stop
+    if (_fromLocation != null && _toLocation != null) {
+      _getRoutes();
+    }
   }
 
   void _selectRoute(int index) {
@@ -293,13 +409,25 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
       );
 
       setState(() {
-        if (isOrigin) {
+        if (_isAddingStop) {
+          // Add as a stop
+          _stops.add(location);
+          _stopController.clear();
+          _addMarker(
+            id: 'stop_${_stops.length - 1}',
+            position: LatLng(lat, lng),
+            title: 'Stop ${_stops.length}',
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          );
+          _isAddingStop = false;
+        } else if (isOrigin) {
           _fromLocation = location;
           _fromController.text = location.name;
           _addMarker(
             id: 'origin',
             position: LatLng(lat, lng),
-            title: 'Pick-up Location'
+            title: 'Pick-up Location',
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
           );
         } else {
           _toLocation = location;
@@ -307,7 +435,8 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
           _addMarker(
             id: 'destination',
             position: LatLng(lat, lng),
-            title: 'Drop-off Location'
+            title: 'Drop-off Location',
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
           );
         }
       });
@@ -319,6 +448,42 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     } catch (e) {
       debugPrint('Error using current location: $e');
       _showError('Error using current location');
+    }
+  }
+
+  // Enable map tap for adding stops
+  void _handleMapTap(LatLng position) async {
+    if (!_isAddingStop) return;
+    
+    try {
+      // Get address from tapped coordinates
+      final placemark = await _locationService.getAddressFromLatLng(position);
+      
+      final location = LocationModel(
+        name: placemark ?? "Stop ${_stops.length + 1}",
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      
+      setState(() {
+        _stops.add(location);
+        _stopController.clear();
+        _addMarker(
+          id: 'stop_${_stops.length - 1}',
+          position: position,
+          title: 'Stop ${_stops.length}',
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        );
+        _isAddingStop = false;
+      });
+      
+      if (_fromLocation != null && _toLocation != null) {
+        await _getRoutes();
+        _fitMapToBounds();
+      }
+    } catch (e) {
+      debugPrint('Error adding stop from map tap: $e');
+      _showError('Error adding stop');
     }
   }
 
@@ -414,9 +579,6 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
       // Get the selected route
       final selectedRoute = _availableRoutes[_selectedRouteIndex];
       
-      // Extract intermediate points
-      final intermediatePoints = getIntermediatePoints(selectedRoute);
-      
       // Create a new published ride document
       await FirebaseFirestore.instance.collection('publishedRides').add({
         // User information (by reference)
@@ -444,10 +606,10 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
           'latitude': _toLocation!.latitude,
           'longitude': _toLocation!.longitude,
         },
-        'intermediatePoints': intermediatePoints.map((point) => {
-          'name': point.name,
-          'latitude': point.latitude,
-          'longitude': point.longitude,
+        'intermediatePoints': _stops.map((stop) => {
+          'name': stop.name,
+          'latitude': stop.latitude,
+          'longitude': stop.longitude,
         }).toList(),
         
         // Ride details
@@ -552,16 +714,61 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
               LocationWidgets.buildPredictionsList(
                 predictions: _predictions,
                 onSelect: _handleLocationSelect,
-                isOrigin: _fromController.selection.isValid,
+                isOrigin: _isAddingStop ? false : _fromController.selection.isValid,
                 top: 230,
               ),
             if (_isLoading || _isLoadingRoute) _buildLoadingIndicator(),
+            if (_isAddingStop) _buildAddingStopOverlay(),
           ],
         ),
       ),
       bottomNavigationBar: Miles2GoBottomNav(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
+      ),
+      floatingActionButton: _isAddingStop ? FloatingActionButton(
+        backgroundColor: Colors.red,
+        child: Icon(Icons.close),
+        onPressed: () {
+          setState(() {
+            _isAddingStop = false;
+            _stopController.clear();
+          });
+        },
+      ) : null,
+    );
+  }
+
+  Widget _buildAddingStopOverlay() {
+    return Positioned(
+      top: 50,
+      left: 0,
+      right: 0,
+      child: Container(
+        margin: EdgeInsets.symmetric(horizontal: 16),
+        padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 5,
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.place, color: Colors.green),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Tap on the map to add a stop or search below',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -607,6 +814,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
       padding: const EdgeInsets.only(bottom: 300),
       liteModeEnabled: false, // Set true for very slow devices
       zoomControlsEnabled: false, // Hide default zoom controls for cleaner UI
+      onTap: _isAddingStop ? _handleMapTap : null, // Enable map tapping only when adding stops
     );
   }
 
@@ -804,6 +1012,8 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
           const SizedBox(height: 16),
           _buildToField(),
           const SizedBox(height: 16),
+          _buildStopsSection(),
+          const SizedBox(height: 16),
           _buildDateField(),
           const SizedBox(height: 16),
           _buildTimeField(),
@@ -814,6 +1024,111 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
           const SizedBox(height: 24),
           _buildPublishButton(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStopsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'STOPS',
+              style: TextStyle(
+                color: Colors.black54,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: _addStop,
+              icon: Icon(Icons.add_location, size: 16),
+              label: Text('Add Stop'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                textStyle: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 8),
+        _isAddingStop ? _buildStopField() : SizedBox(),
+        SizedBox(height: _isAddingStop ? 8 : 0),
+        _stops.isEmpty
+            ? Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Text(
+                    'No stops added yet. Add stops to create waypoints.',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ),
+              )
+            : Column(
+                children: List.generate(
+                  _stops.length,
+                  (index) => _buildStopItem(index),
+                ),
+              ),
+      ],
+    );
+  }
+
+  Widget _buildStopField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green.withOpacity(0.5), width: 2),
+      ),
+      child: LocationWidgets.buildLocationField(
+        controller: _stopController,
+        hint: 'Enter a stop location or tap on map',
+        onChanged: (value) => _searchPlaces(value),
+        onTap: () => setState(() => _predictions = []),
+        onCurrentLocation: () => _useCurrentLocation(false),
+        borderColor: Colors.transparent,
+        prefixIcon: const Icon(Icons.place, color: Colors.green),
+      ),
+    );
+  }
+
+  Widget _buildStopItem(int index) {
+    final stop = _stops[index];
+    return Container(
+      margin: EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Colors.green,
+          child: Text('${index + 1}', style: TextStyle(color: Colors.white)),
+        ),
+        title: Text(
+          stop.name,
+          style: TextStyle(fontWeight: FontWeight.bold),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          '${stop.latitude.toStringAsFixed(5)}, ${stop.longitude.toStringAsFixed(5)}',
+          style: TextStyle(fontSize: 12),
+        ),
+        trailing: IconButton(
+          icon: Icon(Icons.delete, color: Colors.red),
+          onPressed: () => _removeStop(index),
+        ),
+        dense: true,
       ),
     );
   }
@@ -1010,6 +1325,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     _fromController.dispose();
     _toController.dispose();
     _amountController.dispose();
+    _stopController.dispose();
     _mapController?.dispose();
     super.dispose();
   }
