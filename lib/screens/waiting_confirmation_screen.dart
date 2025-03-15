@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import './bottom_navigation.dart';
+import './my_rides_page.dart';
 
 class WaitingConfirmationScreen extends StatefulWidget {
   final String rideId;
@@ -105,6 +106,14 @@ class _WaitingConfirmationScreenState extends State<WaitingConfirmationScreen> {
 
       // Start listening for updates to the request
       _listenForRequestUpdates();
+      
+      // Show success message
+      _showSuccess('Ride request sent successfully!');
+      
+      // Wait a moment before navigating to My Rides page
+      Future.delayed(const Duration(seconds: 2), () {
+        _navigateToRequestList();
+      });
 
     } catch (e) {
       print('Error sending ride request: $e');
@@ -113,6 +122,17 @@ class _WaitingConfirmationScreenState extends State<WaitingConfirmationScreen> {
       });
       _showError('Failed to send ride request. Please try again.');
     }
+  }
+  
+  void _navigateToRequestList() {
+    // Navigate to the My Rides page and select the Requested tab
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const MyRidesPage(initialTabIndex: 1), // 1 for the "REQUESTED" tab
+      ),
+      (route) => false, // Remove all previous routes from the stack
+    );
   }
 
   void _listenForRequestUpdates() {
@@ -172,8 +192,8 @@ class _WaitingConfirmationScreenState extends State<WaitingConfirmationScreen> {
         _requestStatus = 'cancelled';
       });
 
-      // Navigate back to the available rides screen
-      Navigator.pop(context);
+      // Navigate to the request list
+      _navigateToRequestList();
     } catch (e) {
       print('Error cancelling request: $e');
       _showError('Failed to cancel request. Please try again.');
@@ -277,6 +297,22 @@ class _WaitingConfirmationScreenState extends State<WaitingConfirmationScreen> {
                         'Cancel Request',
                         style: TextStyle(
                           color: Colors.redAccent,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                
+                // View My Requests Button
+                if (_isRequestSent)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16.0),
+                    child: TextButton(
+                      onPressed: _navigateToRequestList,
+                      child: const Text(
+                        'View My Requests',
+                        style: TextStyle(
+                          color: Colors.blue,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
