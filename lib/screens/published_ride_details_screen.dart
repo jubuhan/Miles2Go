@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import './bottom_navigation.dart';
 import '../widgets/pending_requests_widget.dart';
+import '../widgets/accepted_passengers_widget.dart';
 import '../services/location_service.dart';
 import '../models/location_model.dart';
 import './manage_ride_requests_screen.dart';
@@ -434,6 +435,13 @@ class _PublishedRideDetailsScreenState extends State<PublishedRideDetailsScreen>
                 ),
                 
                 const SizedBox(height: 16),
+                
+                // ACCEPTED PASSENGERS LIST
+                if (isActive) ...[
+                  AcceptedPassengersWidget(rideId: widget.rideId),
+                  
+                  const SizedBox(height: 16),
+                ],
                 
                 // Pending requests section
                 if (isActive) ...[

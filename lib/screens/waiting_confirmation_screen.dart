@@ -14,6 +14,10 @@ class WaitingConfirmationScreen extends StatefulWidget {
   final String vehicle;
   final String price;
   final String passengers;
+  
+  // Added optional parameters for specific pickup and dropoff
+  final String? passengerPickup;
+  final String? passengerDropoff;
 
   const WaitingConfirmationScreen({
     Key? key,
@@ -26,6 +30,8 @@ class WaitingConfirmationScreen extends StatefulWidget {
     required this.vehicle,
     required this.price,
     required this.passengers,
+    this.passengerPickup,
+    this.passengerDropoff,
   }) : super(key: key);
 
   @override
@@ -64,15 +70,23 @@ class _WaitingConfirmationScreenState extends State<WaitingConfirmationScreen> {
         return;
       }
 
-      // Get user's name
+      // Get user's name and contact info
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
       
       String userName = 'Unknown User';
-      if (userDoc.exists && userDoc.data()!.containsKey('userName')) {
-        userName = userDoc.data()!['userName'];
+      String? phone;
+      
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        if (userData.containsKey('userName')) {
+          userName = userData['userName'];
+        }
+        if (userData.containsKey('phone')) {
+          phone = userData['phone'];
+        }
       }
 
       // Create a new ride request
@@ -80,9 +94,15 @@ class _WaitingConfirmationScreenState extends State<WaitingConfirmationScreen> {
         'rideId': widget.rideId,
         'userId': user.uid,
         'userName': userName,
+        'contact': phone ?? '',
         'driverName': widget.driverName,
+        
+        // Store both the ride's locations and passenger's specific locations
         'from': widget.from,
         'to': widget.to,
+        'passengerPickup': widget.passengerPickup ?? widget.from,
+        'passengerDropoff': widget.passengerDropoff ?? widget.to,
+        
         'date': widget.date,
         'time': widget.time,
         'requestedSeats': int.tryParse(widget.passengers) ?? 1,
@@ -229,6 +249,10 @@ class _WaitingConfirmationScreenState extends State<WaitingConfirmationScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
+        title: const Text(
+          'Request Ride',
+          style: TextStyle(color: Colors.black),
+        ),
       ),
       body: SafeArea(
         child: Center(
@@ -262,10 +286,22 @@ class _WaitingConfirmationScreenState extends State<WaitingConfirmationScreen> {
                     children: [
                       _buildRideDetailRow('Driver', widget.driverName),
                       const SizedBox(height: 8),
-                      _buildRideDetailRow('From', widget.from),
+                      _buildRideDetailRow('Ride From', widget.from),
                       const SizedBox(height: 8),
-                      _buildRideDetailRow('To', widget.to),
+                      _buildRideDetailRow('Ride To', widget.to),
                       const SizedBox(height: 8),
+                      
+                      // Show passenger's specific pickup/dropoff if different from ride endpoints
+                      if (widget.passengerPickup != null && widget.passengerPickup != widget.from) ...[
+                        _buildRideDetailRow('Your Pickup', widget.passengerPickup!),
+                        const SizedBox(height: 8),
+                      ],
+                      
+                      if (widget.passengerDropoff != null && widget.passengerDropoff != widget.to) ...[
+                        _buildRideDetailRow('Your Dropoff', widget.passengerDropoff!),
+                        const SizedBox(height: 8),
+                      ],
+                      
                       _buildRideDetailRow('Date', widget.date),
                       if (widget.time.isNotEmpty) ...[
                         const SizedBox(height: 8),
@@ -405,12 +441,16 @@ class _WaitingConfirmationScreenState extends State<WaitingConfirmationScreen> {
             fontSize: 14,
           ),
         ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.black,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
+        Flexible(
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: Colors.black,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],

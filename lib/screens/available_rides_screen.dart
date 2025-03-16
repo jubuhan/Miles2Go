@@ -346,6 +346,14 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
     final String vehicleName = getSafe(ride, ['vehicleDetails', 'vehicleName']);
     final String price = '₹${ride['amount'] ?? 0}';
     
+    // Check if ride has intermediate stops
+    bool hasIntermediateStops = false;
+    if (ride.containsKey('intermediatePoints') && 
+        ride['intermediatePoints'] is List && 
+        (ride['intermediatePoints'] as List).isNotEmpty) {
+      hasIntermediateStops = true;
+    }
+    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -425,6 +433,29 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
                     ),
                   ],
                 ),
+                
+                // Show intermediate stops if any
+                if (hasIntermediateStops) ...[
+                  for (var point in ride['intermediatePoints'])
+                    if (point is Map && point['name'] != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.more_vert, color: Colors.amber, size: 16),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                point['name'].toString(),
+                                style: TextStyle(color: Colors.blue.shade800),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                ],
+                
                 const SizedBox(height: 4),
                 Row(
                   children: [
@@ -442,6 +473,39 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
               ],
             ),
           ),
+          
+          // If has intermediate stops, show a badge
+          if (hasIntermediateStops)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.more_vert, color: Colors.amber, size: 12),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Has stops',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.amber.shade900,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           
           const SizedBox(height: 8),
           
@@ -470,24 +534,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => WaitingConfirmationScreen(
-                      rideId: rideId,
-                      driverName: name,
-                      from: fromLocation,
-                      to: toLocation,
-                      date: date,
-                      time: time,
-                      vehicle: vehicleName.isNotEmpty ? '$vehicleName ($carModel)' : carModel,
-                      price: price,
-                      passengers: widget.passengers,
-                    ),
-                  ),
-                );
-              },
+              onPressed: () => _requestRide(ride),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -507,5 +554,90 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
         ],
       ),
     );
+  }
+  
+  // Streamlined request ride method without redundant selection
+  void _requestRide(Map<String, dynamic> ride) {
+    final String rideId = ride['id'] ?? '';
+    final String driverName = ride['userName'] ?? 'Unknown Driver';
+    final String fromLocation = getSafe(ride, ['from', 'name']);
+    final String toLocation = getSafe(ride, ['to', 'name']);
+    final String date = getSafe(ride, ['date']);
+    final String time = getSafe(ride, ['time']) != '' 
+        ? getSafe(ride, ['time']) 
+        : 'Not specified';
+    final String carModel = getSafe(ride, ['vehicleDetails', 'model']) != '' 
+        ? getSafe(ride, ['vehicleDetails', 'model']) 
+        : 'Unknown';
+    final String vehicleName = getSafe(ride, ['vehicleDetails', 'vehicleName']);
+    final String price = '₹${ride['amount'] ?? 0}';
+
+    // Check if ride has intermediate stops
+    bool hasIntermediateStops = false;
+    if (ride.containsKey('intermediatePoints') && 
+        ride['intermediatePoints'] is List && 
+        (ride['intermediatePoints'] as List).isNotEmpty) {
+      hasIntermediateStops = true;
+    }
+
+    // For rides with intermediate points, show an info snackbar
+    if (hasIntermediateStops) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'This ride has stops along the way. Your search locations will be used for pickup and dropoff.',
+            style: TextStyle(color: Colors.white),
+          ),
+          backgroundColor: Colors.blue,
+          duration: const Duration(seconds: 3),
+          action: SnackBarAction(
+            label: 'OK',
+            textColor: Colors.white,
+            onPressed: () {
+              // Dismiss the snackbar
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          ),
+        ),
+      );
+    }
+
+    // Always use the search criteria as the passenger's pickup and dropoff
+    // This is more intuitive since they already searched for these locations
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WaitingConfirmationScreen(
+          rideId: rideId,
+          driverName: driverName,
+          from: fromLocation,
+          to: toLocation,
+          date: date,
+          time: time,
+          vehicle: vehicleName.isNotEmpty ? '$vehicleName ($carModel)' : carModel,
+          price: price,
+          passengers: widget.passengers,
+          passengerPickup: widget.from,  // Use search criteria
+          passengerDropoff: widget.to,   // Use search criteria
+        ),
+      ),
+    );
+  }
+  
+  // Safe getter for nested map values
+  String getSafe(dynamic data, List<String> path) {
+    try {
+      dynamic current = data;
+      for (String key in path) {
+        if (current is Map && current.containsKey(key)) {
+          current = current[key];
+        } else {
+          return '';
+        }
+      }
+      return current?.toString() ?? '';
+    } catch (e) {
+      return '';
+    }
   }
 }

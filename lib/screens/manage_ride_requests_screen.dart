@@ -17,8 +17,11 @@ class ManageRideRequestsScreen extends StatefulWidget {
 
 class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
   bool _isLoading = true;
+  List<Map<String, dynamic>> _requests = [];
   int _selectedIndex = 2; // Set to 2 for Rides tab
   String _userId = '';
+  
+  // Stream for real-time updates
   Stream<QuerySnapshot>? _requestsStream;
 
   @override
@@ -48,27 +51,20 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
     });
 
     try {
+      List<String> userRideIds = [];
+      
       // If we have a specific rideId, use it directly
       if (widget.rideId != null) {
-        // Simple query without complex conditions
-        _requestsStream = FirebaseFirestore.instance
-            .collection('rideRequests')
-            .where('rideId', isEqualTo: widget.rideId)
-            .snapshots();
+        userRideIds.add(widget.rideId!);
+      } else {
+        // Otherwise get all ride IDs published by this user
+        final QuerySnapshot ridesSnapshot = await FirebaseFirestore.instance
+            .collection('publishedRides')
+            .where('userId', isEqualTo: _userId)
+            .get();
             
-        setState(() {
-          _isLoading = false;
-        });
-        return;
+        userRideIds = ridesSnapshot.docs.map((doc) => doc.id).toList();
       }
-      
-      // Otherwise get all ride IDs published by this user
-      final QuerySnapshot ridesSnapshot = await FirebaseFirestore.instance
-          .collection('publishedRides')
-          .where('userId', isEqualTo: _userId)
-          .get();
-
-      List<String> userRideIds = ridesSnapshot.docs.map((doc) => doc.id).toList();
 
       if (userRideIds.isEmpty) {
         setState(() {
@@ -77,12 +73,21 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
         return;
       }
 
-      // Set up a basic stream - we'll filter for 'pending' in the UI
-      // Using whereIn without additional conditions to avoid index issues
-      _requestsStream = FirebaseFirestore.instance
-          .collection('rideRequests')
-          .where('rideId', whereIn: userRideIds.length > 10 ? userRideIds.sublist(0, 10) : userRideIds)
-          .snapshots();
+      // Simple query without composite index for real-time updates
+      if (userRideIds.length <= 10) {
+        // Firestore has a limit of 10 items in "whereIn" queries
+        _requestsStream = FirebaseFirestore.instance
+            .collection('rideRequests')
+            .where('rideId', whereIn: userRideIds)
+            .snapshots();
+      } else {
+        // If more than 10 rides, we'll just use the first 10
+        // In a real app, you might want to implement pagination
+        _requestsStream = FirebaseFirestore.instance
+            .collection('rideRequests')
+            .where('rideId', whereIn: userRideIds.sublist(0, 10))
+            .snapshots();
+      }
       
       setState(() {
         _isLoading = false;
@@ -97,7 +102,7 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
   }
 
   Future<void> _handleRequestAction(String requestId, String action) async {
-    // Find the request details to get the ride ID and seat count
+    // Find the request in our list
     try {
       final requestDoc = await FirebaseFirestore.instance
           .collection('rideRequests')
@@ -193,7 +198,7 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
-            : _buildRequestsStreamView(),
+            : _buildRequestsList(),
       ),
       bottomNavigationBar: Miles2GoBottomNav(
         currentIndex: _selectedIndex,
@@ -231,7 +236,7 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
     );
   }
 
-  Widget _buildRequestsStreamView() {
+  Widget _buildRequestsList() {
     if (_requestsStream == null) {
       return _buildEmptyState();
     }
@@ -251,7 +256,7 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
           return _buildEmptyState();
         }
         
-        // Filter for pending requests in the UI
+        // Filter for pending requests
         final pendingDocs = snapshot.data!.docs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           return data['status'] == 'pending';
@@ -261,7 +266,7 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
           return _buildEmptyState();
         }
         
-        // Sort manually by requestedAt
+        // Sort by requested date/time
         pendingDocs.sort((a, b) {
           final aData = a.data() as Map<String, dynamic>;
           final bData = b.data() as Map<String, dynamic>;
@@ -273,55 +278,29 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
           if (aTime == null) return 1;
           if (bTime == null) return -1;
           
-          return bTime.compareTo(aTime); // Descending order
+          return bTime.compareTo(aTime); // Descending order - newest first
         });
         
-        // Process each request document
-        final futureList = pendingDocs.map((doc) async {
-          final requestData = doc.data() as Map<String, dynamic>;
-          
-          // Get the associated ride data
-          Map<String, dynamic>? rideData;
-          try {
-            if (requestData.containsKey('rideId')) {
-              final rideDoc = await FirebaseFirestore.instance
-                  .collection('publishedRides')
-                  .doc(requestData['rideId'])
-                  .get();
-              
-              if (rideDoc.exists) {
-                rideData = rideDoc.data();
-              }
-            }
-          } catch (e) {
-            print('Error fetching ride data: $e');
-          }
-          
-          return {
-            'requestId': doc.id,
-            'requestData': requestData,
-            'rideData': rideData,
-          };
-        }).toList();
-        
-        return FutureBuilder<List<Map<String, dynamic>>>(
-          future: Future.wait(futureList),
-          builder: (context, futureSnapshot) {
-            if (futureSnapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: pendingDocs.length,
+          itemBuilder: (context, index) {
+            final doc = pendingDocs[index];
+            final requestData = doc.data() as Map<String, dynamic>;
             
-            if (!futureSnapshot.hasData || futureSnapshot.data!.isEmpty) {
-              return _buildEmptyState();
-            }
-            
-            final requests = futureSnapshot.data!;
-            
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: requests.length,
-              itemBuilder: (context, index) {
-                return _buildRequestCard(requests[index]);
+            return FutureBuilder(
+              future: _getRideData(requestData['rideId']),
+              builder: (context, rideSnapshot) {
+                Map<String, dynamic>? rideData;
+                if (rideSnapshot.hasData) {
+                  rideData = rideSnapshot.data as Map<String, dynamic>?;
+                }
+                
+                return _buildRequestCard({
+                  'requestId': doc.id,
+                  'requestData': requestData,
+                  'rideData': rideData,
+                });
               },
             );
           },
@@ -330,6 +309,22 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
     );
   }
   
+  Future<Map<String, dynamic>?> _getRideData(String rideId) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('publishedRides')
+          .doc(rideId)
+          .get();
+      
+      if (doc.exists) {
+        return doc.data();
+      }
+    } catch (e) {
+      print('Error fetching ride data: $e');
+    }
+    return null;
+  }
+
   Widget _buildRequestCard(Map<String, dynamic> request) {
     final requestData = request['requestData'] as Map<String, dynamic>;
     final rideData = request['rideData'] as Map<String, dynamic>?;
@@ -337,8 +332,13 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
     
     // Extract request details
     final userName = requestData['userName'] ?? 'Unknown User';
-    final from = requestData['from'] ?? '';
-    final to = requestData['to'] ?? '';
+    final String from = requestData['from'] ?? '';
+    final String to = requestData['to'] ?? '';
+    
+    // Get passenger's specific pickup and dropoff locations
+    final String passengerPickup = requestData['passengerPickup'] ?? from;
+    final String passengerDropoff = requestData['passengerDropoff'] ?? to;
+    
     final date = requestData['date'] ?? '';
     final time = requestData['time'] ?? '';
     final requestedSeats = requestData['requestedSeats'] ?? 1;
@@ -361,6 +361,9 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
         vehicle = vehicleName.isNotEmpty ? '$vehicleName ($vehicleModel)' : vehicleModel;
       }
     }
+    
+    // Get passenger contact if available
+    final contact = requestData['contact'] ?? 'Not provided';
     
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -438,10 +441,117 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildDetailRow('From', from),
+                  // Passenger pickup/dropoff
+                  Text(
+                    'Passenger Locations:',
+                    style: TextStyle(
+                      color: Colors.blue.shade800,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  _buildDetailRow('To', to),
+                  Row(
+                    children: [
+                      const Icon(Icons.circle_outlined, color: Colors.green, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          passengerPickup,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on, color: Colors.red, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          passengerDropoff,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  // Show ride endpoints if different
+                  if (passengerPickup != from || passengerDropoff != to) ...[
+                    const SizedBox(height: 12),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Your Ride Route:',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              const SizedBox(width: 4),
+                              const Icon(Icons.circle_outlined, color: Colors.black38, size: 12),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  from,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[700],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              const SizedBox(width: 4),
+                              const Icon(Icons.location_on, color: Colors.black38, size: 12),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  to,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[700],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  
+                  const SizedBox(height: 12),
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+                  
                   Row(
                     children: [
                       Expanded(child: _buildDetailRow('Date', date)),
@@ -457,6 +567,14 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
                         Expanded(child: _buildDetailRow('Price', price)),
                     ],
                   ),
+                  
+                  // Contact info
+                  if (contact != 'Not provided') ...[
+                    const SizedBox(height: 12),
+                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+                    _buildDetailRow('Contact', contact),
+                  ],
                 ],
               ),
             ),

@@ -129,6 +129,12 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
   }
   
   void _viewRequestDetails(Map<String, dynamic> request) {
+    // Get passenger's custom pickup and dropoff locations
+    final String from = request['from'] ?? 'Unknown';
+    final String to = request['to'] ?? 'Unknown';
+    final String passengerPickup = request['passengerPickup'] ?? from;
+    final String passengerDropoff = request['passengerDropoff'] ?? to;
+    
     // If the ride data exists, we can show the waiting confirmation screen
     if (request.containsKey('rideData') && request['rideData'] != null) {
       final rideData = request['rideData'] as Map<String, dynamic>;
@@ -139,13 +145,15 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
           builder: (context) => WaitingConfirmationScreen(
             rideId: request['rideId'] ?? '',
             driverName: request['driverName'] ?? 'Unknown Driver',
-            from: request['from'] ?? '',
-            to: request['to'] ?? '',
+            from: from,
+            to: to,
             date: request['date'] ?? '',
             time: request['time'] ?? '',
             vehicle: _getVehicleDescription(rideData),
             price: '₹${request['price'] ?? "0"}',
             passengers: '${request['requestedSeats'] ?? "1"}',
+            passengerPickup: passengerPickup,
+            passengerDropoff: passengerDropoff,
           ),
         ),
       );
@@ -161,10 +169,43 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
             children: [
               _buildDetailRow('Status', request['status'] ?? 'Unknown'),
               const SizedBox(height: 8),
-              _buildDetailRow('From', request['from'] ?? 'Unknown'),
+              _buildDetailRow('Driver', request['driverName'] ?? 'Unknown'),
+              const SizedBox(height: 16),
+              
+              // Show passenger-specific pickup/dropoff
+              Text(
+                'Your Trip:',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue,
+                ),
+              ),
+              const SizedBox(height: 4),
+              _buildDetailRow('Pickup', passengerPickup),
               const SizedBox(height: 8),
-              _buildDetailRow('To', request['to'] ?? 'Unknown'),
-              const SizedBox(height: 8),
+              _buildDetailRow('Dropoff', passengerDropoff),
+              const SizedBox(height: 16),
+              
+              // Show ride from/to if different
+              if (passengerPickup != from || passengerDropoff != to) ...[
+                Text(
+                  'Ride Route:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                if (passengerPickup != from)
+                  _buildDetailRow('Ride From', from),
+                if (passengerPickup != from)
+                  const SizedBox(height: 8),
+                if (passengerDropoff != to)
+                  _buildDetailRow('Ride To', to),
+                if (passengerDropoff != to)
+                  const SizedBox(height: 16),
+              ],
+              
               _buildDetailRow('Date', request['date'] ?? 'Unknown'),
               const SizedBox(height: 8),
               _buildDetailRow('Time', request['time'] ?? 'Unknown'),
@@ -627,6 +668,11 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
     final String status = request['status'] ?? 'pending';
     final String from = request['from'] ?? 'Unknown';
     final String to = request['to'] ?? 'Unknown';
+    
+    // Get the passenger-specific pickup and dropoff if available
+    final String passengerPickup = request['passengerPickup'] ?? from;
+    final String passengerDropoff = request['passengerDropoff'] ?? to;
+    
     final String date = request['date'] ?? 'Unknown';
     final String time = request['time'] ?? 'Unknown';
     final String driverName = request['driverName'] ?? 'Unknown Driver';
@@ -690,39 +736,92 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
               
               const SizedBox(height: 12),
               
-              // Route
-              Row(
-                children: [
-                  const Icon(Icons.circle_outlined, color: Colors.green, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      from,
-                      style: const TextStyle(
-                        fontSize: 14,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+              // Route - Show passenger-specific pickup/dropoff
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.circle_outlined, color: Colors.green, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            passengerPickup,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  const Icon(Icons.location_on, color: Colors.red, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      to,
-                      style: const TextStyle(
-                        fontSize: 14,
+                    
+                    // Show ride endpoints if different from passenger pickup/dropoff
+                    if (passengerPickup != from) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const SizedBox(width: 24),
+                          Text(
+                            '(Ride from: $from)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    ],
+                    
+                    const SizedBox(height: 8),
+                    
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on, color: Colors.red, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            passengerDropoff,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    
+                    // Show ride endpoints if different from passenger pickup/dropoff
+                    if (passengerDropoff != to) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const SizedBox(width: 24),
+                          Text(
+                            '(Ride to: $to)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
               ),
               
               const SizedBox(height: 12),
