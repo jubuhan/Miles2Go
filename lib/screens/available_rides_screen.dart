@@ -47,11 +47,20 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
       
       print('Found ${ridesSnapshot.docs.length} rides for date ${widget.date}');
       
-      // Filter by route
+      // Filter by route and available seats
       List<Map<String, dynamic>> matchingRides = [];
       
       for (var doc in ridesSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+        
+        // Check if the ride has available seats
+        final int availableSeats = data['availableSeats'] != null ? 
+          int.tryParse(data['availableSeats'].toString()) ?? 0 : 0;
+        
+        // Skip rides with zero available seats
+        if (availableSeats <= 0) {
+          continue;
+        }
         
         // Check route match
         final bool routeMatches = simpleRouteMatch(data);
@@ -346,6 +355,11 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
     final String vehicleName = getSafe(ride, ['vehicleDetails', 'vehicleName']);
     final String price = '₹${ride['amount'] ?? 0}';
     
+    // Extract available seats
+    final String availableSeats = getSafe(ride, ['availableSeats']) != '' 
+        ? getSafe(ride, ['availableSeats']) 
+        : '0';
+    
     // Check if ride has intermediate stops
     bool hasIntermediateStops = false;
     if (ride.containsKey('intermediatePoints') && 
@@ -474,38 +488,66 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
             ),
           ),
           
-          // If has intermediate stops, show a badge
-          if (hasIntermediateStops)
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.amber),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.more_vert, color: Colors.amber, size: 12),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Has stops',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.amber.shade900,
-                            fontWeight: FontWeight.bold,
-                          ),
+          // Show available seats badge
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.green),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.airline_seat_recline_normal, color: Colors.green, size: 12),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$availableSeats seats available',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.green.shade900,
+                          fontWeight: FontWeight.bold,
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // If has intermediate stops, show a badge
+                if (hasIntermediateStops)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8.0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.amber),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.more_vert, color: Colors.amber, size: 12),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Has stops',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.amber.shade900,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
+          ),
           
           const SizedBox(height: 8),
           
