@@ -8,6 +8,7 @@ import '../services/location_service.dart';
 import '../models/location_model.dart';
 import './bottom_navigation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import './payment_screen.dart';
 
 class PassengerRideTrackingScreen extends StatefulWidget {
   final String rideId;
@@ -1223,7 +1224,8 @@ void _setupDropoffStatusListener() {
       );
     }
   }
-  void _showDropoffConfirmationDialog() {
+  // Update this method in your PassengerRideTrackingScreen class
+void _showDropoffConfirmationDialog() {
   showDialog(
     context: context,
     barrierDismissible: false,
@@ -1247,15 +1249,23 @@ void _setupDropoffStatusListener() {
       actions: [
         TextButton(
           onPressed: () {
-            Navigator.pop(context);
+            Navigator.pop(context); // Dismiss dialog
             _showNotAtDestinationDialog();
           },
           child: const Text('NOT AT DESTINATION'),
         ),
         ElevatedButton(
           onPressed: () {
-            Navigator.pop(context);
-            _confirmDropoff();
+            Navigator.pop(context); // Dismiss dialog first
+            
+            // Use a slight delay before calling _confirmDropoff to ensure dialog is dismissed
+            Future.delayed(const Duration(milliseconds: 100), () {
+              _confirmDropoff().then((_) {
+                print("Confirm dropoff completed");
+              }).catchError((e) {
+                print("Error in confirm dropoff: $e");
+              });
+            });
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,
@@ -1297,6 +1307,7 @@ void _showNotAtDestinationDialog() {
 }
 
 // Method to confirm dropoff
+// Update the _confirmDropoff method in _PassengerRideTrackingScreenState
 Future<void> _confirmDropoff() async {
   if (_requestId.isEmpty) {
     _showError('Cannot confirm dropoff: Request ID not found');
@@ -1355,14 +1366,39 @@ Future<void> _confirmDropoff() async {
       _isLoading = false;
     });
     
-    _showSuccess('Dropoff confirmed! Thank you for using our service.');
+    _showSuccess('Dropoff confirmed! Proceeding to payment.');
     
-    // If this is not a multi-passenger ride, navigate back to home after a short delay
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        Navigator.of(context).popUntil((route) => route.isFirst);
+    // Navigate to payment screen
+    if (mounted) {
+      // Get the request data to pass to payment screen
+      final requestDoc = await FirebaseFirestore.instance
+          .collection('rideRequests')
+          .doc(_requestId)
+          .get();
+          
+      Map<String, dynamic> paymentData = {};
+      if (requestDoc.exists) {
+        paymentData = requestDoc.data() as Map<String, dynamic>;
       }
-    });
+      
+      // If there's no specific request data, use the ride data
+      if (paymentData.isEmpty && _rideData != null) {
+        paymentData = _rideData!;
+      }
+      
+      // Navigate to payment screen
+      // Adding replacement navigation to ensure we don't stack screens
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PaymentScreen(
+            rideId: widget.rideId,
+            requestId: _requestId,
+            rideData: paymentData,
+          ),
+        ),
+      );
+    }
     
   } catch (e) {
     print('Error confirming dropoff: $e');
@@ -1373,7 +1409,6 @@ Future<void> _confirmDropoff() async {
     });
   }
 }
-
 // Method to build the dropoff status UI
 Widget _buildDropoffStatusIndicator() {
   if (!_isDroppedOff) {

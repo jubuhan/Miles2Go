@@ -9,6 +9,7 @@ import '../services/location_service.dart';
 import '../models/location_model.dart';
 import '../widgets/accepted_passengers_widget.dart';
 import './bottom_navigation.dart';
+import '../services/ride_history_service.dart';
 
 class ActiveRideScreen extends StatefulWidget {
   final String rideId;
@@ -873,90 +874,98 @@ Future<void> _saveEmergencyContact(String number) async {
   }
 }
 
-  void _completeRide() async {
-    // Show confirmation dialog
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Complete Ride'),
-        content: const Text(
-          'Are you sure you want to mark this ride as completed? This will notify all passengers.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('NO'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('YES'),
-          ),
-        ],
+ void _completeRide() async {
+  // Show confirmation dialog
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Complete Ride'),
+      content: const Text(
+        'Are you sure you want to mark this ride as completed? This will notify all passengers.',
       ),
-    );
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('NO'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('YES'),
+        ),
+      ],
+    ),
+  );
 
-    if (confirm != true) return;
+  if (confirm != true) return;
 
-    try {
-      // Show loading indicator
-      setState(() {
-        _isLoading = true;
-      });
+  try {
+    // Show loading indicator
+    setState(() {
+      _isLoading = true;
+    });
 
-      // 1. Update ride status to 'completed'
-      await FirebaseFirestore.instance
-          .collection('publishedRides')
-          .doc(widget.rideId)
-          .update({
+    // 1. Update ride status to 'completed'
+    await FirebaseFirestore.instance
+        .collection('publishedRides')
+        .doc(widget.rideId)
+        .update({
+      'status': 'completed',
+      'completedAt': FieldValue.serverTimestamp(),
+    });
+
+    // 2. Get accepted passengers to update their status
+    final QuerySnapshot acceptedPassengers = await FirebaseFirestore.instance
+        .collection('rideRequests')
+        .where('rideId', isEqualTo: widget.rideId)
+        .where('status', isEqualTo: 'accepted')
+        .get();
+
+    // Update all accepted ride requests to completed
+    final batch = FirebaseFirestore.instance.batch();
+    for (var doc in acceptedPassengers.docs) {
+      batch.update(doc.reference, {
         'status': 'completed',
         'completedAt': FieldValue.serverTimestamp(),
       });
-
-      // 2. Get accepted passengers to update their status
-      final QuerySnapshot acceptedPassengers = await FirebaseFirestore.instance
-          .collection('rideRequests')
-          .where('rideId', isEqualTo: widget.rideId)
-          .where('status', isEqualTo: 'accepted')
-          .get();
-
-      // Update all accepted ride requests to completed
-      final batch = FirebaseFirestore.instance.batch();
-      for (var doc in acceptedPassengers.docs) {
-        batch.update(doc.reference, {
-          'status': 'completed',
-          'completedAt': FieldValue.serverTimestamp(),
-        });
-      }
-      await batch.commit();
-
-      // 3. Delete the live location document
-      await FirebaseFirestore.instance
-          .collection('liveLocations')
-          .doc(widget.locationDocId)
-          .delete();
-
-      // Stop location updates
-      _stopLocationUpdates();
-
-      // Hide loading indicator
-      setState(() {
-        _isLoading = false;
-      });
-
-      _showSuccess('Ride completed successfully');
-
-      // Return to ride details screen
-      if (mounted) {
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      print('Error completing ride: $e');
-      setState(() {
-        _isLoading = false;
-      });
-      _showError('Failed to complete ride');
     }
+    await batch.commit();
+
+    // 3. Delete the live location document
+    await FirebaseFirestore.instance
+        .collection('liveLocations')
+        .doc(widget.locationDocId)
+        .delete();
+        
+    // 4. Save ride to driver's history
+    final historyService = RideHistoryService();
+    await historyService.saveRideToHistory(
+      rideId: widget.rideId,
+      requestId: '', // Driver doesn't have a request ID
+      isDriver: true,
+    );
+
+    // Stop location updates
+    _stopLocationUpdates();
+
+    // Hide loading indicator
+    setState(() {
+      _isLoading = false;
+    });
+
+    _showSuccess('Ride completed successfully');
+
+    // Return to ride details screen
+    if (mounted) {
+      Navigator.pop(context);
+    }
+  } catch (e) {
+    print('Error completing ride: $e');
+    setState(() {
+      _isLoading = false;
+    });
+    _showError('Failed to complete ride');
   }
+}
 
   void _onItemTapped(int index) {
     setState(() {
