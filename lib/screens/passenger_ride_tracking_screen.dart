@@ -53,16 +53,18 @@ class _PassengerRideTrackingScreenState extends State<PassengerRideTrackingScree
   // ETA calculation
   String _estimatedArrival = 'Calculating...';
   Timer? _etaTimer;
+  bool _isDroppedOff = false;
   
-  @override
-  void initState() {
-    super.initState();
-    _fetchRideDetails();
-    _startLocationUpdates();
-    _listenForPickupStatus();
-    _listenForRideCompletion(); // Added for ride completion 
-  }
-
+  
+ @override
+void initState() {
+  super.initState();
+  _fetchRideDetails();
+  _startLocationUpdates();
+  _listenForPickupStatus();
+  _listenForRideCompletion();
+  _listenForDropoffStatus(); // Add this line
+}
   @override
   void dispose() {
     _stopLocationUpdates();
@@ -1052,6 +1054,68 @@ Future<void> _saveEmergencyContact(String number) async {
     }
   }
 
+  // Add this method to listen for dropoff status
+void _listenForDropoffStatus() {
+  // Get the current user
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+  
+  // First, find the request ID if we don't have it yet
+  if (_requestId.isEmpty) {
+    FirebaseFirestore.instance
+      .collection('rideRequests')
+      .where('rideId', isEqualTo: widget.rideId)
+      .where('userId', isEqualTo: user.uid)
+      .where('status', isEqualTo: 'accepted')
+      .limit(1)
+      .get()
+      .then((snapshot) {
+        if (snapshot.docs.isNotEmpty) {
+          setState(() {
+            _requestId = snapshot.docs.first.id;
+          });
+          
+          // Now that we have the request ID, set up the real-time listener
+          _setupDropoffStatusListener();
+        }
+      })
+      .catchError((e) {
+        print('Error finding ride request: $e');
+      });
+  } else {
+    // If we already have the request ID, just set up the listener
+    _setupDropoffStatusListener();
+  }
+}
+
+void _setupDropoffStatusListener() {
+  // Listen to the ride request document for dropoff status updates
+  FirebaseFirestore.instance
+    .collection('rideRequests')
+    .doc(_requestId)
+    .snapshots()
+    .listen((docSnapshot) {
+      if (docSnapshot.exists) {
+        final data = docSnapshot.data() as Map<String, dynamic>;
+        
+        print('Dropoff status update: isDroppedOff=${data['isDroppedOff']}, isDropoffConfirmed=${data['isDropoffConfirmed']}');
+        
+        setState(() {
+          _isDroppedOff = data['isDroppedOff'] ?? false;
+          _dropoffConfirmed = data['isDropoffConfirmed'] ?? false;
+        });
+        
+        // Show the confirmation dialog if needed
+        if (_isDroppedOff && !_dropoffConfirmed) {
+          _showDropoffConfirmationDialog();
+        }
+      }
+    }, onError: (e) {
+      print('Error listening to dropoff status: $e');
+    });
+}
+
+
   // Method to build the ride completion status UI
   Widget _buildRideCompletionStatus() {
     if (!_rideCompleted) {
@@ -1159,6 +1223,265 @@ Future<void> _saveEmergencyContact(String number) async {
       );
     }
   }
+  void _showDropoffConfirmationDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      title: const Text('Confirm Dropoff'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'The driver has marked you as dropped off at your destination. Please confirm that you have reached your destination.',
+          ),
+          const SizedBox(height: 16),
+          if (_rideData != null && _rideData!.containsKey('driverName'))
+            Text(
+              'Driver: ${_rideData!['driverName']}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+            _showNotAtDestinationDialog();
+          },
+          child: const Text('NOT AT DESTINATION'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            _confirmDropoff();
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+          ),
+          child: const Text('CONFIRM DROPOFF'),
+        ),
+      ],
+    ),
+  );
+}
+
+// Method to show dialog when passenger says they are not at destination
+void _showNotAtDestinationDialog() {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Not at Your Destination?'),
+      content: const Text(
+        'If the driver has marked you as dropped off but you haven\'t reached your destination, please contact them immediately.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('DISMISS'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            _contactDriver();
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+          ),
+          child: const Text('CONTACT DRIVER'),
+        ),
+      ],
+    ),
+  );
+}
+
+// Method to confirm dropoff
+Future<void> _confirmDropoff() async {
+  if (_requestId.isEmpty) {
+    _showError('Cannot confirm dropoff: Request ID not found');
+    return;
+  }
+  
+  try {
+    // Show loading indicator
+    setState(() {
+      _isLoading = true;
+    });
+    
+    // Update the ride request
+    await FirebaseFirestore.instance
+        .collection('rideRequests')
+        .doc(_requestId)
+        .update({
+      'isDropoffConfirmed': true,
+      'dropoffConfirmedAt': FieldValue.serverTimestamp(),
+    });
+    
+    // Also update in the published ride's acceptedPassengers array
+    final rideDoc = await FirebaseFirestore.instance
+        .collection('publishedRides')
+        .doc(widget.rideId)
+        .get();
+    
+    if (rideDoc.exists) {
+      final rideData = rideDoc.data() as Map<String, dynamic>;
+      List<dynamic> acceptedPassengersList = rideData['acceptedPassengers'] ?? [];
+      
+      // Find the passenger in the list and update dropoff status
+      bool found = false;
+      for (int i = 0; i < acceptedPassengersList.length; i++) {
+        if (acceptedPassengersList[i]['requestId'] == _requestId) {
+          acceptedPassengersList[i]['isDropoffConfirmed'] = true;
+          found = true;
+          break;
+        }
+      }
+      
+      // Update the document with the modified list
+      if (found) {
+        await FirebaseFirestore.instance
+            .collection('publishedRides')
+            .doc(widget.rideId)
+            .update({
+          'acceptedPassengers': acceptedPassengersList,
+        });
+      }
+    }
+    
+    // Update state
+    setState(() {
+      _dropoffConfirmed = true;
+      _isLoading = false;
+    });
+    
+    _showSuccess('Dropoff confirmed! Thank you for using our service.');
+    
+    // If this is not a multi-passenger ride, navigate back to home after a short delay
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    });
+    
+  } catch (e) {
+    print('Error confirming dropoff: $e');
+    _showError('Failed to confirm dropoff: ${e.toString()}');
+    
+    setState(() {
+      _isLoading = false;
+    });
+  }
+}
+
+// Method to build the dropoff status UI
+Widget _buildDropoffStatusIndicator() {
+  if (!_isDroppedOff) {
+    return const SizedBox.shrink(); // Don't show anything if not dropped off
+  }
+  
+  if (_dropoffConfirmed) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.purple.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.purple.shade300),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.done_all, color: Colors.purple.shade700),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Dropoff Confirmed',
+                  style: TextStyle(
+                    color: Colors.purple.shade700,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  'You have confirmed arrival at your destination',
+                  style: TextStyle(
+                    color: Colors.purple.shade700,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  } else {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade300),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(Icons.warning_amber, color: Colors.orange.shade700),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Driver Has Marked Dropoff',
+                      style: TextStyle(
+                        color: Colors.orange.shade700,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      'Please confirm you\'ve reached your destination',
+                      style: TextStyle(
+                        color: Colors.orange.shade700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: () => _showNotAtDestinationDialog(),
+                child: const Text('NOT AT DESTINATION'),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _confirmDropoff,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('CONFIRM DROPOFF'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
   
   // Enhanced pickup status indicator
   Widget _buildPickupStatusIndicator() {
@@ -1467,6 +1790,7 @@ Positioned(
                   
                   // Pickup status indicator
                   _buildPickupStatusIndicator(),
+                  _buildDropoffStatusIndicator(), 
                   
                   // Add ride completion status indicator
                   _buildRideCompletionStatus(),

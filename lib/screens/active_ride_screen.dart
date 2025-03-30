@@ -43,6 +43,10 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
   List<LocationModel> _pickupLocations = [];
   int _currentPickupIndex = 0;
   List<Map<String, dynamic>> _passengers = [];
+  List<Map<String, dynamic>> _droppedOffPassengers = [];
+bool _isNavigatingToDropoff = false;
+List<LocationModel> _dropoffLocations = [];
+int _currentDropoffIndex = 0;
 
   @override
   void initState() {
@@ -978,6 +982,217 @@ Future<void> _saveEmergencyContact(String number) async {
       ),
     );
   }
+  void _dropoffPassenger(String requestId, String passengerName) async {
+  // Show confirmation dialog
+  final bool? confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Drop off $passengerName?'),
+      content: Text('Are you sure you want to mark $passengerName as dropped off at their destination?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('CANCEL'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+          child: const Text('CONFIRM'),
+        ),
+      ],
+    ),
+  );
+
+  if (confirm != true) return;
+
+  try {
+    // Show loading indicator
+    setState(() {
+      _isLoading = true;
+    });
+
+    // 1. Update the ride request document
+    await FirebaseFirestore.instance
+        .collection('rideRequests')
+        .doc(requestId)
+        .update({
+      'isDroppedOff': true,
+      'droppedOffAt': FieldValue.serverTimestamp(),
+    });
+
+    // 2. Update the published ride's acceptedPassengers array
+    final rideDoc = await FirebaseFirestore.instance
+        .collection('publishedRides')
+        .doc(widget.rideId)
+        .get();
+
+    if (rideDoc.exists) {
+      final rideData = rideDoc.data() as Map<String, dynamic>;
+      List<dynamic> acceptedPassengersList = rideData['acceptedPassengers'] ?? [];
+
+      // Find and update the specific passenger in the array
+      bool passengerFound = false;
+      for (int i = 0; i < acceptedPassengersList.length; i++) {
+        if (acceptedPassengersList[i]['requestId'] == requestId) {
+          acceptedPassengersList[i]['isDroppedOff'] = true;
+          passengerFound = true;
+          break;
+        }
+      }
+
+      // Only update if we found and modified the passenger
+      if (passengerFound) {
+        await FirebaseFirestore.instance
+            .collection('publishedRides')
+            .doc(widget.rideId)
+            .update({
+          'acceptedPassengers': acceptedPassengersList,
+        });
+      }
+    }
+
+    // 3. Update local state to reflect changes
+    setState(() {
+      for (int i = 0; i < _passengers.length; i++) {
+        if (_passengers[i]['requestId'] == requestId) {
+          _passengers[i]['isDroppedOff'] = true;
+          // Add to the dropped off passengers list
+          _droppedOffPassengers.add(_passengers[i]);
+          break;
+        }
+      }
+      _isLoading = false;
+    });
+
+    // Show success message
+    _showSuccess('Marked $passengerName as dropped off.');
+    
+    // Update map if needed
+    _setupMap();
+    
+    // Check if all passengers have been dropped off
+    _checkAllPassengersDroppedOff();
+    
+  } catch (e) {
+    print('Error marking dropoff complete: $e');
+    _showError('Failed to update dropoff status');
+    setState(() {
+      _isLoading = false;
+    });
+  }
+}
+
+// Add this method to check if all passengers have been dropped off
+void _checkAllPassengersDroppedOff() {
+  if (_passengers.isEmpty) return;
+  
+  bool allDroppedOff = true;
+  for (var passenger in _passengers) {
+    if (!(passenger['isDroppedOff'] ?? false)) {
+      allDroppedOff = false;
+      break;
+    }
+  }
+  
+  if (allDroppedOff) {
+    // Show a message suggesting to complete the ride
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('All Passengers Dropped Off'),
+        content: const Text('All passengers have been dropped off. Would you like to complete this ride?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('NOT YET'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _completeRide();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('COMPLETE RIDE'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Update _setupMap method to handle dropoff locations
+// Add this to the existing _setupMap method where appropriate
+void _setupDropoffLocations() {
+  if (_rideData == null) return;
+
+  try {
+    // Build list of dropoff locations for passengers who haven't been dropped off yet
+    List<LocationModel> dropoffLocations = [];
+    for (var passengerData in _passengers) {
+      // Skip passengers who are already dropped off
+      if (passengerData['isDroppedOff'] == true) {
+        continue;
+      }
+
+      // Get dropoff location from ride requests
+      final requestId = passengerData['requestId'];
+      if (requestId != null) {
+        FirebaseFirestore.instance
+            .collection('rideRequests')
+            .doc(requestId)
+            .get()
+            .then((requestDoc) {
+          if (requestDoc.exists) {
+            final requestData = requestDoc.data() as Map<String, dynamic>;
+
+            // Try to get structured location data
+            if (requestData.containsKey('dropoffLocation')) {
+              final dropoffLocation = _extractLocation(
+                  requestData['dropoffLocation'],
+                  passengerData['passengerName'] ?? 'Passenger');
+              dropoffLocations.add(dropoffLocation);
+            }
+            // Try to get from string location
+            else if (requestData.containsKey('passengerDropoff') &&
+                requestData['passengerDropoff'] != null) {
+              final dropoffString = requestData['passengerDropoff'];
+              _locationService.getLatLngFromAddress(
+                  dropoffString,
+                  (error) => print('Error geocoding dropoff: $error'))
+                  .then((dropoffLocation) {
+                if (dropoffLocation != null) {
+                  final location = LocationModel(
+                    name: passengerData['passengerName'] ?? 'Passenger',
+                    latitude: dropoffLocation.latitude,
+                    longitude: dropoffLocation.longitude,
+                  );
+                  dropoffLocations.add(location);
+                  
+                  // Update state if we have new dropoff locations
+                  if (dropoffLocations.isNotEmpty) {
+                    setState(() {
+                      _dropoffLocations = dropoffLocations;
+                    });
+                  }
+                }
+              });
+            }
+          }
+        });
+      }
+    }
+
+    // Update state with dropoff locations
+    if (dropoffLocations.isNotEmpty) {
+      setState(() {
+        _dropoffLocations = dropoffLocations;
+      });
+    }
+  } catch (e) {
+    print('Error setting up dropoff locations: $e');
+  }
+}
+
   
 
   // Helper methods for passenger list UI
@@ -1046,124 +1261,216 @@ Future<void> _saveEmergencyContact(String number) async {
   }
 
   // New improved passenger list
-  Widget _buildPassengerList() {
-    if (_passengers.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Center(
-          child: Text(
-            'No passengers to pick up',
-            style: TextStyle(color: Colors.grey),
-          ),
-        ),
-      );
-    }
-
+  
+// Modify the _buildPassengerList to include dropoff UI
+Widget _buildPassengerList() {
+  if (_passengers.isEmpty) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.grey.shade100,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Passengers',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 8),
-          ...List.generate(_passengers.length, (index) {
-            final passenger = _passengers[index];
-            final bool isPickedUp = passenger['isPickedUp'] ?? false;
-            final bool isConfirmed = passenger['isPickupConfirmed'] ?? false;
-            final String name = passenger['passengerName'] ?? 'Passenger';
-            final String contact = passenger['passengerContact'] ?? 'No contact info';
-            final String requestId = passenger['requestId'] ?? '';
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _getStatusColor(isPickedUp, isConfirmed),
-                    ),
-                    child: Center(
-                      child: Icon(
-                        _getStatusIcon(isPickedUp, isConfirmed),
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            Icon(Icons.phone, size: 12, color: Colors.grey.shade600),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                contact,
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 12,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  _buildStatusBadge(isPickedUp, isConfirmed),
-                  if (!isPickedUp)
-                    IconButton(
-                      icon: const Icon(Icons.check_circle_outline, color: Colors.green),
-                      onPressed: () => _pickupPassenger(requestId, name),
-                      tooltip: 'Mark as picked up',
-                    ),
-                  IconButton(
-                    icon: const Icon(Icons.call, color: Colors.blue),
-                    onPressed: () => _contactPassenger(contact, name),
-                    tooltip: 'Contact passenger',
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
+      child: const Center(
+        child: Text(
+          'No passengers to pick up',
+          style: TextStyle(color: Colors.grey),
+        ),
       ),
     );
   }
+
+  return Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.grey.shade300),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Passengers',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...List.generate(_passengers.length, (index) {
+          final passenger = _passengers[index];
+          final bool isPickedUp = passenger['isPickedUp'] ?? false;
+          final bool isConfirmed = passenger['isPickupConfirmed'] ?? false;
+          final bool isDroppedOff = passenger['isDroppedOff'] ?? false;
+          final String name = passenger['passengerName'] ?? 'Passenger';
+          final String contact = passenger['passengerContact'] ?? 'No contact info';
+          final String requestId = passenger['requestId'] ?? '';
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _getPassengerStatusColor(isPickedUp, isConfirmed, isDroppedOff),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      _getPassengerStatusIcon(isPickedUp, isConfirmed, isDroppedOff),
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          Icon(Icons.phone, size: 12, color: Colors.grey.shade600),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              contact,
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                _buildPassengerStatusBadge(isPickedUp, isConfirmed, isDroppedOff),
+                if (!isPickedUp)
+                  IconButton(
+                    icon: const Icon(Icons.check_circle_outline, color: Colors.green),
+                    onPressed: () => _pickupPassenger(requestId, name),
+                    tooltip: 'Mark as picked up',
+                  ),
+                if (isPickedUp && isConfirmed && !isDroppedOff)
+                  IconButton(
+                    icon: const Icon(Icons.logout, color: Colors.orange),
+                    onPressed: () => _dropoffPassenger(requestId, name),
+                    tooltip: 'Mark as dropped off',
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.call, color: Colors.blue),
+                  onPressed: () => _contactPassenger(contact, name),
+                  tooltip: 'Contact passenger',
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    ),
+  );
+}
+
+// Helper methods for passenger status UI with dropoff status
+Color _getPassengerStatusColor(bool isPickedUp, bool isConfirmed, bool isDroppedOff) {
+  if (isDroppedOff) return Colors.purple;
+  if (isPickedUp && isConfirmed) return Colors.green;
+  if (isPickedUp) return Colors.orange;
+  return Colors.grey;
+}
+
+IconData _getPassengerStatusIcon(bool isPickedUp, bool isConfirmed, bool isDroppedOff) {
+  if (isDroppedOff) return Icons.done_all;
+  if (isPickedUp && isConfirmed) return Icons.check;
+  if (isPickedUp) return Icons.timer;
+  return Icons.person;
+}
+
+Widget _buildPassengerStatusBadge(bool isPickedUp, bool isConfirmed, bool isDroppedOff) {
+  if (isDroppedOff) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.purple.shade100,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        'Dropped Off',
+        style: TextStyle(
+          color: Colors.purple.shade800,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  } else if (isPickedUp && isConfirmed) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.green.shade100,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        'On Board',
+        style: TextStyle(
+          color: Colors.green.shade800,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  } else if (isPickedUp) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade100,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        'Waiting',
+        style: TextStyle(
+          color: Colors.orange.shade800,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  } else {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        'Pending',
+        style: TextStyle(
+          color: Colors.grey.shade800,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
 
   @override
   Widget build(BuildContext context) {
