@@ -724,6 +724,150 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
       ),
     );
   }
+  void _handleSOSPressed() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      title: const Text('Emergency SOS'),
+      content: const Text(
+        'Do you want to contact your emergency number?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('CANCEL'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            _contactEmergencyNumber();
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('CONTACT EMERGENCY'),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _contactEmergencyNumber() async {
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _showError('User not authenticated');
+      return;
+    }
+    
+    // Get user document with emergency contact
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+        
+    if (!userDoc.exists) {
+      _showError('User profile not found');
+      return;
+    }
+    
+    final userData = userDoc.data() as Map<String, dynamic>;
+    final emergencyContact = userData['emergencyContact'];
+    
+    if (emergencyContact == null || emergencyContact.isEmpty) {
+      // Show dialog to set emergency contact
+      _showSetEmergencyContactDialog();
+      return;
+    }
+    
+    // Call emergency contact
+    final Uri launchUri = Uri(
+      scheme: 'tel',
+      path: emergencyContact,
+    );
+    
+    try {
+      await launchUrl(launchUri);
+    } catch (e) {
+      _showError('Could not launch call: $e');
+    }
+  } catch (e) {
+    print('Error contacting emergency number: $e');
+    _showError('Failed to contact emergency number');
+  }
+}
+
+void _showSetEmergencyContactDialog() {
+  final TextEditingController controller = TextEditingController();
+  
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Set Emergency Contact'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'You haven\'t set an emergency contact yet. Please enter a phone number to use for emergencies.',
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              labelText: 'Emergency Contact Number',
+              border: OutlineInputBorder(),
+            ),
+            keyboardType: TextInputType.phone,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('CANCEL'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (controller.text.isNotEmpty) {
+              Navigator.pop(context);
+              _saveEmergencyContact(controller.text);
+            } else {
+              _showError('Please enter a valid phone number');
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+          ),
+          child: const Text('SAVE'),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _saveEmergencyContact(String number) async {
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .update({
+      'emergencyContact': number,
+    });
+    
+    _showSuccess('Emergency contact saved');
+    
+    // Try to call the emergency contact
+    _contactEmergencyNumber();
+  } catch (e) {
+    print('Error saving emergency contact: $e');
+    _showError('Failed to save emergency contact');
+  }
+}
 
   void _completeRide() async {
     // Show confirmation dialog
@@ -834,6 +978,7 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
       ),
     );
   }
+  
 
   // Helper methods for passenger list UI
   Color _getStatusColor(bool isPickedUp, bool isConfirmed) {
@@ -1097,6 +1242,17 @@ class _ActiveRideScreenState extends State<ActiveRideScreen> {
             const Center(
               child: CircularProgressIndicator(),
             ),
+            // SOS Button - Add in the same position as the passenger screen
+Positioned(
+  top: 100,
+  right: 16,
+  child: FloatingActionButton(
+    onPressed: _handleSOSPressed,
+    backgroundColor: Colors.red,
+    child: const Icon(Icons.sos, color: Colors.white),
+    tooltip: 'Emergency SOS',
+  ),
+),
 
           // Bottom panel for navigation info and actions
           Positioned(

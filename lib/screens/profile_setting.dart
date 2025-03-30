@@ -15,6 +15,29 @@ class ProfileSettingsPage extends StatefulWidget {
 
   @override
   _ProfileSettingsPageState createState() => _ProfileSettingsPageState();
+  
+  // Static method to verify if emergency contact exists
+  static Future<bool> verifyEmergencyContactExists() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return false;
+      
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+          
+      if (!userDoc.exists) return false;
+      
+      final userData = userDoc.data() as Map<String, dynamic>;
+      final emergencyContact = userData['emergencyContact'];
+      
+      return emergencyContact != null && emergencyContact.isNotEmpty;
+    } catch (e) {
+      print('Error verifying emergency contact: $e');
+      return false;
+    }
+  }
 }
 
 
@@ -95,6 +118,109 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
         builder: (context) => ServiceSelectionScreen(),
       ),
     );
+  }
+  
+  void _showEmergencyContactDialog() async {
+    // Get current emergency contact if it exists
+    String currentEmergencyContact = '';
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+            
+        if (userDoc.exists) {
+          Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+          currentEmergencyContact = userData['emergencyContact'] ?? '';
+        }
+      }
+    } catch (e) {
+      print('Error getting emergency contact: $e');
+    }
+    
+    final TextEditingController controller = TextEditingController(text: currentEmergencyContact);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Emergency Contact'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'This number will be called in case of an emergency during your rides.',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Emergency Contact Number',
+                prefixIcon: Icon(Icons.phone),
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.phone,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.isNotEmpty) {
+                Navigator.pop(context);
+                _saveEmergencyContact(controller.text);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a valid phone number'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+            ),
+            child: const Text('SAVE'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _saveEmergencyContact(String number) async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'emergencyContact': number,
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Emergency contact saved successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error saving emergency contact: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to save emergency contact'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -194,7 +320,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                   _buildSettingsItem(Icons.privacy_tip, "Privacy policy",
                       "know our privacy policy"),
                   _buildSettingsItem(Icons.headphones, "Customer support",
-                  "connect us for any issue"),
+                      "connect us for any issue"),
+                  _buildSettingsItem(Icons.emergency, "Emergency Contact",
+                      "Set up your emergency contact for safety"),
                 ],
               ),
             ),
@@ -245,26 +373,28 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
       trailing: const Icon(Icons.arrow_forward_ios, color: Colors.black54, size: 16),
       onTap: () {
         if (title == "Notification") {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) =>  NotificationsPage()),
-        );
-      }else if (title == "Terms & Conditions") {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const TermsAndConditionsPage()),
-        );
-      }else if (title == "Privacy policy") {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const Privacyandpolicy()),
-        );
-      }else if (title == "Customer support") {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const CustomerSupportPage()),
-        );
-      }
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => NotificationsPage()),
+          );
+        } else if (title == "Terms & Conditions") {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const TermsAndConditionsPage()),
+          );
+        } else if (title == "Privacy policy") {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const Privacyandpolicy()),
+          );
+        } else if (title == "Customer support") {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CustomerSupportPage()),
+          );
+        } else if (title == "Emergency Contact") {
+          _showEmergencyContactDialog();
+        }
       },
     );
   }
