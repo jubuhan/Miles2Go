@@ -101,52 +101,133 @@ class _ManageRideRequestsScreenState extends State<ManageRideRequestsScreen> {
     }
   }
 
-  Future<void> _handleRequestAction(String requestId, String action) async {
-    // Find the request in our list
-    try {
-      final requestDoc = await FirebaseFirestore.instance
-          .collection('rideRequests')
-          .doc(requestId)
-          .get();
-      
-      if (!requestDoc.exists) {
-        _showError('Request not found');
-        return;
-      }
-      
-      final requestData = requestDoc.data() as Map<String, dynamic>;
-      final rideId = requestData['rideId'];
-      final requestedSeats = requestData['requestedSeats'] ?? 1;
-      
-      // Update the request status
-      await FirebaseFirestore.instance
-          .collection('rideRequests')
-          .doc(requestId)
-          .update({
-        'status': action,
-        'respondedAt': FieldValue.serverTimestamp(),
-      });
-
-      if (action == 'rejected') {
-        // If rejected, restore the available seats
-        await FirebaseFirestore.instance
-            .collection('publishedRides')
-            .doc(rideId)
-            .update({
-          'availableSeats': FieldValue.increment(requestedSeats),
-          'bookedSeats': FieldValue.increment(-requestedSeats),
-        });
-      }
-
-      _showSuccess(action == 'accepted' 
-          ? 'Ride request accepted!' 
-          : 'Ride request rejected');
-      
-    } catch (e) {
-      print('Error updating request: $e');
-      _showError('Failed to process request');
+Future<void> _handleRequestAction(String requestId, String action) async {
+  // Find the request in our list
+  try {
+    final requestDoc = await FirebaseFirestore.instance
+        .collection('rideRequests')
+        .doc(requestId)
+        .get();
+    
+    if (!requestDoc.exists) {
+      _showError('Request not found');
+      return;
     }
+    
+    final requestData = requestDoc.data() as Map<String, dynamic>;
+    final rideId = requestData['rideId'];
+    final requestedSeats = requestData['requestedSeats'] ?? 1;
+    final passengerId = requestData['userId'];
+    
+    // Get the ride document to get driver details
+    final rideDoc = await FirebaseFirestore.instance
+        .collection('publishedRides')
+        .doc(rideId)
+        .get();
+    
+    if (!rideDoc.exists) {
+      _showError('Ride not found');
+      return;
+    }
+    
+    final rideData = rideDoc.data() as Map<String, dynamic>;
+    final driverId = rideData['userId'];
+    
+    // Get driver details
+    final driverDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(driverId)
+        .get();
+    
+    Map<String, dynamic> driverDetails = {};
+    if (driverDoc.exists) {
+      final driverData = driverDoc.data() as Map<String, dynamic>;
+      driverDetails = {
+        'driverName': driverData['userName'] ?? driverData['name'] ?? driverData['displayName'] ?? 'Driver',
+        'driverContact': driverData['phone'] ?? driverData['phoneNumber'] ?? driverData['contact'] ?? '',
+        'driverEmail': driverData['email'] ?? '',
+      };
+    }
+    
+    // Get passenger details
+    final passengerDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(passengerId)
+        .get();
+    
+    Map<String, dynamic> passengerDetails = {};
+    if (passengerDoc.exists) {
+      final passengerData = passengerDoc.data() as Map<String, dynamic>;
+      passengerDetails = {
+        'passengerName': passengerData['userName'] ?? passengerData['name'] ?? passengerData['displayName'] ?? 'Passenger',
+        'passengerContact': passengerData['phone'] ?? passengerData['phoneNumber'] ?? passengerData['contact'] ?? '',
+        'passengerEmail': passengerData['email'] ?? '',
+      };
+    }
+    
+    // Update the request status
+    Map<String, dynamic> updateData = {
+      'status': action,
+      'respondedAt': FieldValue.serverTimestamp(),
+      'isPickedUp': false,
+      'isPickupConfirmed': false,
+    };
+    
+    // If accepting, add driver and passenger contact details
+    if (action == 'accepted') {
+      updateData = {
+        ...updateData,
+        ...driverDetails, // Add driver contact info
+        ...passengerDetails, // Add passenger details to request doc too
+        'passengerPickupConfirmed': false,
+        'isDroppedOff': false,
+        'isDropoffConfirmed': false,
+      };
+      
+      // Also update passenger details in the ride document under accepted passengers
+      await FirebaseFirestore.instance
+          .collection('publishedRides')
+          .doc(rideId)
+          .update({
+        'acceptedPassengers': FieldValue.arrayUnion([{
+          'requestId': requestId,
+          'userId': passengerId,
+          ...passengerDetails,
+          'requestedSeats': requestedSeats,
+          'isPickedUp': false,
+          'isPickupConfirmed': false,
+          'isDroppedOff': false,
+          'isDropoffConfirmed': false,
+          'destination': requestData['passengerDropoff'] ?? requestData['to'] ?? '',
+        }]),
+      });
+    }
+
+    await FirebaseFirestore.instance
+        .collection('rideRequests')
+        .doc(requestId)
+        .update(updateData);
+
+    if (action == 'rejected') {
+      // If rejected, restore the available seats
+      await FirebaseFirestore.instance
+          .collection('publishedRides')
+          .doc(rideId)
+          .update({
+        'availableSeats': FieldValue.increment(requestedSeats),
+        'bookedSeats': FieldValue.increment(-requestedSeats),
+      });
+    }
+
+    _showSuccess(action == 'accepted' 
+        ? 'Ride request accepted!' 
+        : 'Ride request rejected');
+    
+  } catch (e) {
+    print('Error updating request: $e');
+    _showError('Failed to process request');
   }
+}
 
   void _onItemTapped(int index) {
     setState(() {

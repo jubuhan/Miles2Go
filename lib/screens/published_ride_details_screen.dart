@@ -8,6 +8,10 @@ import '../widgets/accepted_passengers_widget.dart';
 import '../services/location_service.dart';
 import '../models/location_model.dart';
 import './manage_ride_requests_screen.dart';
+import 'active_ride_screen.dart'; // We'll create this screen
+import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class PublishedRideDetailsScreen extends StatefulWidget {
   final String rideId;
@@ -31,10 +35,12 @@ class _PublishedRideDetailsScreenState extends State<PublishedRideDetailsScreen>
   Set<Polyline> _polylines = {};
 
   @override
-  void initState() {
-    super.initState();
-    _fetchRideDetails();
-  }
+void initState() {
+  super.initState();
+  _fetchRideDetails().then((_) {
+    _checkRideStatus();
+  });
+}
 
   Future<void> _fetchRideDetails() async {
     setState(() {
@@ -247,6 +253,159 @@ class _PublishedRideDetailsScreenState extends State<PublishedRideDetailsScreen>
     );
   }
 
+
+
+void _startRide() async {
+  // Show confirmation dialog
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Start Ride'),
+      content: const Text(
+        'Are you sure you want to start this ride? This will notify all accepted passengers.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('NO'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('YES'),
+        ),
+      ],
+    ),
+  );
+  
+  if (confirm != true) return;
+  
+  try {
+    // Show loading indicator
+    setState(() {
+      _isLoading = true;
+    });
+    
+    // 1. Update ride status to 'started'
+    await FirebaseFirestore.instance
+        .collection('publishedRides')
+        .doc(widget.rideId)
+        .update({
+      'status': 'started',
+      'startedAt': FieldValue.serverTimestamp(),
+    });
+    
+    // 2. Get accepted passengers to update their requests
+    final QuerySnapshot acceptedPassengers = await FirebaseFirestore.instance
+        .collection('rideRequests')
+        .where('rideId', isEqualTo: widget.rideId)
+        .where('status', isEqualTo: 'accepted')
+        .get();
+    
+    // 3. Get driver's current location
+    Position? currentPosition = await _locationService.getCurrentPosition();
+    
+    if (currentPosition != null) {
+      // 4. Create a location document to track driver's location
+     // 4. Create a location document to track driver's location
+final user = FirebaseAuth.instance.currentUser;
+final String? userEmail = user?.email;
+
+final locationDoc = await FirebaseFirestore.instance
+    .collection('liveLocations')
+    .add({
+  'rideId': widget.rideId,
+  'driverId': user?.uid,
+  'driverEmail': userEmail ?? 'no-email',  // Added driver's email
+  'latitude': currentPosition.latitude,
+  'longitude': currentPosition.longitude,
+  'speed': currentPosition.speed,
+  'heading': currentPosition.heading,
+  'timestamp': FieldValue.serverTimestamp(),
+});
+      
+      // 5. Update all passenger requests to notify them through app
+    // 5. Update all passenger requests to notify them through app
+final batch = FirebaseFirestore.instance.batch();
+for (var doc in acceptedPassengers.docs) {
+  batch.update(doc.reference, {
+    'rideStarted': true,
+    'rideStartedAt': FieldValue.serverTimestamp(),
+    'locationDocId': locationDoc.id,
+    'pickupLocationName': _rideData!['from']?['name'] ?? 'Pickup location'
+  });
+}
+await batch.commit();
+    
+      // 6. Navigate to active ride screen
+      if (mounted) {
+        // Hide loading indicator
+        setState(() {
+          _isLoading = false;
+        });
+        
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ActiveRideScreen(
+              rideId: widget.rideId,
+              locationDocId: locationDoc.id,
+            ),
+          ),
+        );
+      }
+    } else {
+      // Hide loading indicator and show error
+      setState(() {
+        _isLoading = false;
+      });
+      _showError('Could not get current location. Please try again.');
+    }
+  } catch (e) {
+    print('Error starting ride: $e');
+    // Hide loading indicator and show error
+    setState(() {
+      _isLoading = false;
+    });
+    _showError('Failed to start ride. Please try again.');
+  }
+}
+
+// Helper method to send FCM notification
+Future<void> _sendRideStartedNotification(
+  String fcmToken, 
+  String locationDocId,
+  String pickupLocation
+) async {
+  try {
+    // Using Firebase Cloud Messaging HTTP v1 API
+    // In a real app, you would typically do this through a secure server
+    final response = await http.post(
+      Uri.parse('https://fcm.googleapis.com/fcm/send'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'key=YOUR_SERVER_KEY', // Replace with your FCM server key
+      },
+      body: jsonEncode({
+        'to': fcmToken,
+        'notification': {
+          'title': 'Your ride has started',
+          'body': 'The driver is on the way to pick you up!',
+        },
+        'data': {
+          'type': 'ride_started',
+          'rideId': widget.rideId,
+          'locationDocId': locationDocId,
+          'pickupLocation': pickupLocation,
+        },
+      }),
+    );
+    
+    print('Notification sent: ${response.statusCode}');
+  } catch (e) {
+    print('Error sending notification: $e');
+  }
+}
+
   void _showSuccess(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -255,6 +414,36 @@ class _PublishedRideDetailsScreenState extends State<PublishedRideDetailsScreen>
       ),
     );
   }
+  // Add this to your PublishedRideDetailsScreen to check ride status
+void _checkRideStatus() async {
+  if (_rideData == null) return;
+  
+  // If ride is already started, navigate to active ride view
+  if (_rideData!['status'] == 'started') {
+    // Get the live location document ID for this ride
+    final QuerySnapshot locationDocs = await FirebaseFirestore.instance
+        .collection('liveLocations')
+        .where('rideId', isEqualTo: widget.rideId)
+        .limit(1)
+        .get();
+    
+    if (locationDocs.docs.isNotEmpty) {
+      final locationDoc = locationDocs.docs.first;
+      
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ActiveRideScreen(
+            rideId: widget.rideId,
+            locationDocId: locationDoc.id,
+          ),
+        ),
+      );
+    } else {
+      _showError('Could not find tracking information for this ride');
+    }
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -463,27 +652,51 @@ class _PublishedRideDetailsScreenState extends State<PublishedRideDetailsScreen>
                 
                 // Action buttons
                 if (isActive)
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _cancelRide,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: const Text(
-                        'CANCEL RIDE',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+                   Row(
+    children: [
+      Expanded(
+        child: ElevatedButton(
+          onPressed: _startRide,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+          child: const Text(
+            'START RIDE',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: ElevatedButton(
+          onPressed: _cancelRide,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+          child: const Text(
+            'CANCEL RIDE',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    ],
+  ),
+]
+  
             ),
           ),
         ),

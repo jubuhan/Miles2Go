@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:miles2go/screens/bottom_navigation.dart';
+import 'package:miles2go/services/database_service.dart';
 
 class EditProfilePage extends StatefulWidget {
   final String initialName;
@@ -23,13 +24,42 @@ class _EditProfilePageState extends State<EditProfilePage> {
   int _selectedIndex = 2; // Set to match the current page in bottom navigation
   late TextEditingController _nameController;
   late TextEditingController _emailController;
+  late TextEditingController _phoneController;
   bool _isLoading = false;
+  bool _isLoadingInitialData = true;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.initialName);
     _emailController = TextEditingController(text: widget.initialEmail);
+    _phoneController = TextEditingController();
+    _fetchPhoneNumber();
+  }
+
+  Future<void> _fetchPhoneNumber() async {
+    setState(() {
+      _isLoadingInitialData = true;
+    });
+
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        // Fetch phone number using DatabaseServices
+        String? phoneNumber = await DatabaseServices().getUserPhoneNumber(user.uid);
+        if (phoneNumber != null) {
+          setState(() {
+            _phoneController.text = phoneNumber;
+          });
+        }
+      }
+    } catch (error) {
+      print("Error fetching phone number: $error");
+    } finally {
+      setState(() {
+        _isLoadingInitialData = false;
+      });
+    }
   }
 
   void _onItemTapped(int index) {
@@ -42,15 +72,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
   Future<void> _updateProfile() async {
     String name = _nameController.text.trim();
     String email = _emailController.text.trim();
+    String phone = _phoneController.text.trim();
 
     // Validate inputs
-    if (name.isEmpty || email.isEmpty) {
+    if (name.isEmpty || email.isEmpty || phone.isEmpty) {
       _showErrorDialog("Please fill in all required fields");
       return;
     }
@@ -58,6 +90,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
     // Check if email is valid
     if (!RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+").hasMatch(email)) {
       _showErrorDialog("Please enter a valid email address");
+      return;
+    }
+
+    // Validate phone number
+    if (!RegExp(r'^\+?[0-9]{10,15}$').hasMatch(phone)) {
+      _showErrorDialog("Please enter a valid phone number");
       return;
     }
 
@@ -72,6 +110,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         // Update Firestore document
         await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
           'userName': name,
+          'phoneNumber': phone, // Update phone number in Firestore
         });
 
         // Check if email is changed
@@ -81,7 +120,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
         // Show success message and go back
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully')),
+          const SnackBar(content: Text('Profile updated successfully'),backgroundColor: Colors.green,),
         );
         Navigator.pop(context);
       }
@@ -137,7 +176,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: _isLoading
+      body: _isLoading || _isLoadingInitialData
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               child: Padding(
@@ -207,7 +246,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     ),
                     
                     const SizedBox(height: 20),
-                   // const Divider(),
                     
                     // Email address
                     Column(
@@ -236,6 +274,45 @@ class _EditProfilePageState extends State<EditProfilePage> {
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16,
                               vertical: 14,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 20),
+                    
+                    // Phone number field
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Phone number",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _phoneController,
+                          keyboardType: TextInputType.phone,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
+                            ),
+                            hintText: "Enter your phone number",
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.phone,
+                              color: Colors.grey,
                             ),
                           ),
                         ),

@@ -350,6 +350,142 @@ class LocationService {
     }
   }
   
+  // Get current position with optimized accuracy - Improved version
+  Future<Position?> getCurrentPosition({
+    LocationAccuracy accuracy = LocationAccuracy.high,
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        print('Location services are disabled');
+        // Try to enable location services (on Android)
+        try {
+          await Geolocator.openLocationSettings();
+          // Check again after user potentially enables it
+          serviceEnabled = await Geolocator.isLocationServiceEnabled();
+          if (!serviceEnabled) {
+            return null;
+          }
+        } catch (e) {
+          print('Error opening location settings: $e');
+          return null;
+        }
+      }
+
+      // Check location permissions
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          print('Location permissions denied');
+          return null;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        print('Location permissions permanently denied');
+        return null;
+      }
+
+      // First try - with provided accuracy and timeout
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: accuracy,
+          timeLimit: timeout,
+        );
+        
+        currentPosition = position;
+        return position;
+      } catch (e) {
+        print('First location attempt failed: $e');
+        // Don't return - continue to try fallbacks
+      }
+      
+      // Second try - with medium accuracy and extended timeout
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 15),
+        );
+        
+        currentPosition = position;
+        return position;
+      } catch (e) {
+        print('Second location attempt failed: $e');
+        // Don't return - continue to try fallbacks
+      }
+      
+      // Third try - with low accuracy
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.low,
+          timeLimit: const Duration(seconds: 20),
+        );
+        
+        currentPosition = position;
+        return position;
+      } catch (e) {
+        print('Third location attempt failed: $e');
+        // Now try last known position
+      }
+      
+      // Last fallback - get last known position
+      print('Falling back to last known position');
+      final lastPosition = await Geolocator.getLastKnownPosition();
+      if (lastPosition != null) {
+        currentPosition = lastPosition;
+        return lastPosition;
+      }
+      
+      // If we have a stored position from earlier in the app session, use that
+      if (currentPosition != null) {
+        return currentPosition;
+      }
+      
+      print('All location attempts failed');
+      return null;
+    } catch (e) {
+      print('Error in getCurrentPosition: $e');
+      return currentPosition; // Return last stored position if available
+    }
+  }
+
+  // Get latitude and longitude from a string address
+  Future<LatLng?> getLatLngFromAddress(String address, Function(String) onError) async {
+    try {
+      if (address.isEmpty) {
+        onError('Address is empty');
+        return null;
+      }
+
+      // Use the Google Places API to geocode address
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/geocode/json?'
+        'address=${Uri.encodeComponent(address)}&'
+        'key=$apiKey'
+      );
+      
+      final response = await http.get(url);
+      final data = json.decode(response.body);
+      
+      if (data['status'] == 'OK' && data['results'] != null && data['results'].isNotEmpty) {
+        final location = data['results'][0]['geometry']['location'];
+        final lat = location['lat'];
+        final lng = location['lng'];
+        
+        return LatLng(lat, lng);
+      } else {
+        onError('Could not geocode address: ${data['status']}');
+        return null;
+      }
+    } catch (e) {
+      onError('Error geocoding address: $e');
+      return null;
+    }
+  }
+  
   // Decode Google polyline to list of LatLng
   List<LatLng> decodePolyline(String encoded) {
     List<LatLng> poly = [];

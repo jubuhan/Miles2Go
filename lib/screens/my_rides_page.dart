@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
+import '../screens/passenger_ride_tracking_screen.dart';
 import 'package:miles2go/screens/published_ride_details_screen.dart';
 import 'package:miles2go/screens/manage_ride_requests_screen.dart';
 import 'package:miles2go/screens/waiting_confirmation_screen.dart';
@@ -28,6 +30,10 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
   Stream<QuerySnapshot>? _publishedRidesStream;
   Stream<QuerySnapshot>? _requestedRidesStream;
   
+  // Add these variables for ride started notifications
+  StreamSubscription<QuerySnapshot>? _rideRequestsSubscription;
+  Map<String, bool> _hasShownRideStartedAlert = {};
+  
   @override
   void initState() {
     super.initState();
@@ -45,12 +51,79 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
       
       // Set up simple streams to avoid index issues
       _setupStreams();
+      
+      // Listen for ride updates
+      _listenForRideUpdates();
     } else {
       setState(() {
         _isLoading = false;
       });
       _showError('You must be logged in to view your rides');
     }
+  }
+  
+  void _listenForRideUpdates() {
+    // Cancel existing subscription if any
+    _rideRequestsSubscription?.cancel();
+    
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    _rideRequestsSubscription = FirebaseFirestore.instance
+      .collection('rideRequests')
+      .where('userId', isEqualTo: user.uid)
+      .where('status', isEqualTo: 'accepted')
+      .snapshots()
+      .listen((snapshot) {
+        for (var doc in snapshot.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final requestId = doc.id;
+          
+          // Check if the ride has started and we haven't shown an alert for it yet
+          if (data['rideStarted'] == true && 
+              (!_hasShownRideStartedAlert.containsKey(requestId) || 
+               _hasShownRideStartedAlert[requestId] != true)) {
+            
+            // Mark that we've shown an alert for this ride
+            _hasShownRideStartedAlert[requestId] = true;
+            
+            // Show an alert to the user
+            if (mounted) {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => AlertDialog(
+                  title: const Text('Your ride has started!'),
+                  content: const Text('The driver is on the way to pick you up. Would you like to track their location?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('LATER'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        // Navigate to tracking screen
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => PassengerRideTrackingScreen(
+                              rideId: data['rideId'],
+                              locationDocId: data['locationDocId'] ?? '',
+                              pickupLocation: data['passengerPickup'] ?? data['from'] ?? '',
+                            ),
+                          ),
+                        );
+                      },
+                      child: const Text('TRACK NOW'),
+                    ),
+                  ],
+                ),
+              );
+            }
+          }
+        }
+      });
   }
   
   void _setupStreams() {
@@ -134,6 +207,21 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
     final String to = request['to'] ?? 'Unknown';
     final String passengerPickup = request['passengerPickup'] ?? from;
     final String passengerDropoff = request['passengerDropoff'] ?? to;
+    
+    // Check if ride is started and has location tracking info
+    if (request['rideStarted'] == true && request['locationDocId'] != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PassengerRideTrackingScreen(
+            rideId: request['rideId'] ?? '',
+            locationDocId: request['locationDocId'] ?? '',
+            pickupLocation: passengerPickup,
+          ),
+        ),
+      );
+      return;
+    }
     
     // If the ride data exists, we can show the waiting confirmation screen
     if (request.containsKey('rideData') && request['rideData'] != null) {
@@ -495,6 +583,7 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
   }
   
   Widget _buildPublishedRideCard(Map<String, dynamic> ride) {
+    // Your existing implementation
     final String from = ride['from']?['name'] ?? 'Unknown';
     final String to = ride['to']?['name'] ?? 'Unknown';
     final String date = ride['date'] ?? 'Unknown';
@@ -665,6 +754,7 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
   }
   
   Widget _buildRequestedRideCard(Map<String, dynamic> request) {
+    // Your existing implementation
     final String status = request['status'] ?? 'pending';
     final String from = request['from'] ?? 'Unknown';
     final String to = request['to'] ?? 'Unknown';
@@ -687,6 +777,9 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
     } else {
       statusColor = Colors.red;
     }
+    
+    // Add a "Track" button if ride has started
+    final bool rideStarted = request['rideStarted'] == true;
     
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -712,9 +805,9 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Text(
-                      status.toUpperCase(),
+                      rideStarted ? 'STARTED' : status.toUpperCase(),
                       style: TextStyle(
-                        color: statusColor,
+                        color: rideStarted ? Colors.green : statusColor,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
@@ -826,52 +919,58 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
               
               const SizedBox(height: 12),
               
-              // Details
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
-                      const SizedBox(width: 4),
-                      Text(date),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      const Icon(Icons.access_time, size: 16, color: Colors.grey),
-                      const SizedBox(width: 4),
-                      Text(time),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      const Icon(Icons.people, size: 16, color: Colors.grey),
-                      const SizedBox(width: 4),
-                      Text('$requestedSeats'),
-                    ],
-                  ),
-                ],
-              ),
-              
-              const SizedBox(height: 12),
-              
-              // Action button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => _viewRequestDetails(request),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                  ),
-                  child: const Text('VIEW DETAILS'),
-                ),
-              ),
+              // Details// Details
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+              const SizedBox(width: 4),
+              Text(date),
             ],
           ),
+          Row(
+            children: [
+              const Icon(Icons.access_time, size: 16, color: Colors.grey),
+              const SizedBox(width: 4),
+              Text(time),
+            ],
+          ),
+          Row(
+            children: [
+              const Icon(Icons.people, size: 16, color: Colors.grey),
+              const SizedBox(width: 4),
+              Text('$requestedSeats'),
+            ],
+          ),
+        ],
+      ),
+      
+      const SizedBox(height: 12),
+      
+      // Action button - Change to Track button if ride has started
+      SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: () => _viewRequestDetails(request),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: rideStarted ? Colors.green : Colors.blue,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+          ),
+          child: Text(
+            rideStarted ? 'TRACK RIDE' : 'VIEW DETAILS',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
+      ),
+    ],
+  ),
+),
       ),
     );
   }
@@ -879,6 +978,7 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
   @override
   void dispose() {
     _tabController.dispose();
+    _rideRequestsSubscription?.cancel();
     super.dispose();
   }
 }

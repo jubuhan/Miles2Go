@@ -30,6 +30,7 @@ class _SignUpPageState extends State<SignUpPage> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController(); // Added phone controller
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
@@ -46,6 +47,7 @@ class _SignUpPageState extends State<SignUpPage> {
   void dispose() {
     _usernameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose(); // Dispose phone controller
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -69,6 +71,21 @@ class _SignUpPageState extends State<SignUpPage> {
       return 'Please enter a valid email address';
     }
 
+    return null;
+  }
+
+  // Added phone number validator
+  String? _validatePhone(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter a phone number';
+    }
+    
+    // Basic validation for phone number (can be customized based on your requirements)
+    final phoneRegExp = RegExp(r'^\+?[0-9]{10,15}$');
+    if (!phoneRegExp.hasMatch(value)) {
+      return 'Please enter a valid phone number';
+    }
+    
     return null;
   }
 
@@ -108,12 +125,19 @@ class _SignUpPageState extends State<SignUpPage> {
       _isLoading = true;
     });
 
-  final isSignupSuccess =  await AuthService().signUp(context, _emailController.text,
-        _usernameController.text, _passwordController.text);
+    final isSignupSuccess = await AuthService().signUp(
+      context, 
+      _emailController.text,
+      _usernameController.text, 
+      _passwordController.text,
+      _phoneController.text, // Pass phone number to AuthService
+    );
 
-        if(isSignupSuccess){
-          Navigator.of(context).push(MaterialPageRoute(builder: (context){return WalletSelectionPage(); }));
-        }
+    if(isSignupSuccess == true) {
+      Navigator.of(context).push(MaterialPageRoute(builder: (context) {
+        return WalletSelectionPage();
+      }));
+    }
 
     setState(() {
       _isLoading = false;
@@ -191,6 +215,30 @@ class _SignUpPageState extends State<SignUpPage> {
                           style: const TextStyle(color: Colors.black54),
                           validator: _validateEmail,
                           keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 20),
+                        // New Phone Number field
+                        TextFormField(
+                          controller: _phoneController,
+                          decoration: const InputDecoration(
+                            hintText: 'Phone Number',
+                            prefixIcon:
+                                Icon(Icons.phone, color: Colors.black54),
+                            hintStyle: TextStyle(color: Colors.black54),
+                            enabledBorder: UnderlineInputBorder(
+                              borderSide: BorderSide(color: Colors.black54),
+                            ),
+                            focusedBorder: UnderlineInputBorder(
+                              borderSide: BorderSide(color: Colors.black54),
+                            ),
+                            errorBorder: UnderlineInputBorder(
+                              borderSide: BorderSide(color: Colors.red),
+                            ),
+                          ),
+                          style: const TextStyle(color: Colors.black54),
+                          validator: _validatePhone,
+                          keyboardType: TextInputType.phone,
                           textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 20),
@@ -296,12 +344,6 @@ class _SignUpPageState extends State<SignUpPage> {
                           height: 50, // Fixed height for the button
                           child: ElevatedButton(
                             onPressed: _isLoading ? null : _signUp,
-                            // onPressed: _isLoading
-                            //     ? null
-                            //     : () {
-                            //         AuthService().signUp(
-                            //             _emailController.text, _usernameController.text, _passwordController.text);
-                            //       },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.blue,
                               disabledBackgroundColor:

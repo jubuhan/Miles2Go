@@ -7,6 +7,7 @@ import 'package:miles2go/screens/customersupport.dart';
 import 'package:miles2go/screens/editprofile.dart';
 import 'package:miles2go/screens/notification.dart';
 import 'package:miles2go/screens/privacyandpolicy.dart';
+import 'package:miles2go/screens/service_selection_screen.dart';
 import 'package:miles2go/screens/termsandcondition.dart';
 
 class ProfileSettingsPage extends StatefulWidget {
@@ -86,6 +87,16 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
     );
   }
 
+
+  void _navigateToServiceSelection() {
+    // Navigate to the service selection (wallet selection) page
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ServiceSelectionScreen(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -96,7 +107,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           color: Colors.black,
-          onPressed: () => Navigator.pop(context),
+          onPressed: _navigateToServiceSelection,
         ),
       ),
       body: SingleChildScrollView(
