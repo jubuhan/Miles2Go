@@ -42,6 +42,8 @@ dependencies:
   firebase_core: ^3.12.1
   cloud_firestore: ^5.6.5
   get: ^4.7.2
+  walletconnect_dart: ^0.0.11
+  walletconnect_flutter_v2: ^2.0.0
   
  
 
@@ -50,7 +52,7 @@ dev_dependencies:
     sdk: flutter
   
   google_maps_flutter: ^2.0.0
-  geolocator: ^9.0.0
+  geolocator: ^11.0.0
   google_place: ^0.4.7
 
   # The "flutter_lints" package below contains a set of recommended lints to
@@ -60,8 +62,10 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
 
+  # You might also need to specify other packages if conflicts continue
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
+
 
 # The following section is specific to Flutter packages.
 flutter:

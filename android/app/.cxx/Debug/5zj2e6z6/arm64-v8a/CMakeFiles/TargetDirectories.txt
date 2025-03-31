@@ -1,0 +1,2 @@
+C:/Users/user/OneDrive/Desktop/projectMiles2Go/Miles2Go/android/app/.cxx/Debug/5zj2e6z6/arm64-v8a/CMakeFiles/edit_cache.dir
+C:/Users/user/OneDrive/Desktop/projectMiles2Go/Miles2Go/android/app/.cxx/Debug/5zj2e6z6/arm64-v8a/CMakeFiles/rebuild_cache.dir
