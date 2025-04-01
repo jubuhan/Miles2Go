@@ -5,11 +5,16 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:miles2go/login/wallet_selection.dart';
 import 'package:miles2go/services/authservices.dart';
+import 'package:miles2go/services/ipfs_pinata_service.dart';
 
 // Main function to initialize Firebase and run the app
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  // Initialize the ride request listener for IPFS uploads
+  final ipfsService = IPFSPinataService();
+  ipfsService.listenForAcceptedRideRequests();
+
   runApp(MaterialApp(
     home: SignUpPage(),
     routes: {
