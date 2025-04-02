@@ -4,6 +4,7 @@ import 'package:miles2go/login/otp.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:miles2go/login/wallet_selection.dart';
+import 'package:miles2go/screens/EmailVerification.dart';
 import 'package:miles2go/services/authservices.dart';
 import 'package:miles2go/services/ipfs_pinata_service.dart';
 
@@ -11,20 +12,23 @@ import 'package:miles2go/services/ipfs_pinata_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  // Initialize the ride request listener for IPFS uploads
   final ipfsService = IPFSPinataService();
   ipfsService.listenForAcceptedRideRequests();
-
   runApp(MaterialApp(
-    home: SignUpPage(),
+    home: LoginPage(), // Changed from SignUpPage to LoginPage
     routes: {
       '/login': (context) => LoginPage(),
+      '/signup': (context) => SignUpPage(),
+      '/email_verification': (context) => EmailVerificationPage(),
     },
   ));
 }
 
 class SignUpPage extends StatefulWidget {
-  const SignUpPage({Key? key}) : super(key: key);
+  // Add parameter to accept verified email
+  final String? verifiedEmail;
+  
+  const SignUpPage({Key? key, this.verifiedEmail}) : super(key: key);
 
   @override
   _SignUpPageState createState() => _SignUpPageState();
@@ -47,6 +51,15 @@ class _SignUpPageState extends State<SignUpPage> {
   String? _errorMessage;
   bool _passwordVisible = false;
   bool _confirmPasswordVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // If verified email is provided, set it to the email controller
+    if (widget.verifiedEmail != null) {
+      _emailController.text = widget.verifiedEmail!;
+    }
+  }
 
   @override
   void dispose() {
@@ -202,28 +215,39 @@ class _SignUpPageState extends State<SignUpPage> {
                         const SizedBox(height: 20),
                         TextFormField(
                           controller: _emailController,
-                          decoration: const InputDecoration(
+                          enabled: widget.verifiedEmail == null, // Disable if email is verified
+                          decoration: InputDecoration(
                             hintText: 'Email ID',
                             prefixIcon:
-                                Icon(Icons.email, color: Colors.black54),
-                            hintStyle: TextStyle(color: Colors.black54),
-                            enabledBorder: UnderlineInputBorder(
+                                const Icon(Icons.email, color: Colors.black54),
+                            // suffixIcon: widget.verifiedEmail != null 
+                            //     ? const Icon(Icons.verified, color: Colors.green) 
+                            //     : null,
+                            hintStyle: const TextStyle(color: Colors.black54),
+                            enabledBorder: const UnderlineInputBorder(
                               borderSide: BorderSide(color: Colors.black54),
                             ),
-                            focusedBorder: UnderlineInputBorder(
+                            focusedBorder: const UnderlineInputBorder(
                               borderSide: BorderSide(color: Colors.black54),
                             ),
-                            errorBorder: UnderlineInputBorder(
+                            errorBorder: const UnderlineInputBorder(
                               borderSide: BorderSide(color: Colors.red),
                             ),
+                            disabledBorder: const UnderlineInputBorder(
+                              borderSide: BorderSide(color: Colors.black54),
+                            ),
+                            filled: widget.verifiedEmail != null,
+                           // fillColor: widget.verifiedEmail != null ? Colors.green.withOpacity(0.1) : null,
                           ),
-                          style: const TextStyle(color: Colors.black54),
+                          style: TextStyle(
+                            color: widget.verifiedEmail != null ? Colors.grey[400] : Colors.black54,
+                            fontWeight: widget.verifiedEmail != null ? FontWeight.bold : FontWeight.normal,
+                          ),
                           validator: _validateEmail,
                           keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 20),
-                        // New Phone Number field
                         TextFormField(
                           controller: _phoneController,
                           decoration: const InputDecoration(

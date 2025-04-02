@@ -107,7 +107,7 @@ class _WalletSelectionPageState extends State<WalletSelectionPage> {
                         // MetaMask Button (Replaces Bybit)
                         _buildWalletButton(
                           onTap: _handleMetaMaskSelection,
-                          imagePath: 'assets/images/Metamask-icon.png', // Replace with MetaMask logo
+                          imagePath: 'assets/images/binance_logo.png', // Replace with MetaMask logo
                           title: 'METAMASK',
                           color: Colors.blue,
                         ),
