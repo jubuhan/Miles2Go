@@ -1,0 +1,2 @@
+-keep class io.flutter.plugins.geolocator.** { *; }
+-keep class com.baseflow.geolocator.** { *; }

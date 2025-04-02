@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../screens/service_selection_screen.dart';
+import 'package:miles2go/screens/service_selection_screen.dart';
+import 'package:miles2go/services/walletconnect.dart'; // Ensure this file has connectWallet()
 
 class WalletSelectionPage extends StatefulWidget {
   const WalletSelectionPage({Key? key}) : super(key: key);
@@ -10,47 +11,25 @@ class WalletSelectionPage extends StatefulWidget {
 
 class _WalletSelectionPageState extends State<WalletSelectionPage> {
   bool _isLoading = false;
+  final WalletConnectService _walletConnectService = WalletConnectService(); // ✅ Use WalletConnectService
 
-  Future<bool> _checkKYCStatus(String walletType) async {
-    await Future.delayed(const Duration(seconds: 1));
-    return true;
-  }
-
-  Future<bool> _connectWallet(String walletType) async {
-    await Future.delayed(const Duration(seconds: 1));
-    return true;
-  }
-
-  Future<void> _handleWalletSelection(String walletType) async {
+  Future<void> _handleMetaMaskSelection() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final isKYCApproved = await _checkKYCStatus(walletType);
-
-      if (!isKYCApproved) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('KYC verification required for this wallet')),
-        );
-        return;
-      }
-
-      final isConnected = await _connectWallet(walletType);
+      await _walletConnectService.initWalletConnect(); // ✅ Ensure initialization
+      await _walletConnectService.connectWallet((message) {
+        debugPrint(message);
+      });
 
       if (!mounted) return;
 
-      if (isConnected) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const ServiceSelectionScreen()),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to connect wallet')),
-        );
-      }
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const ServiceSelectionScreen()),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,7 +69,7 @@ class _WalletSelectionPageState extends State<WalletSelectionPage> {
                     child: Center(
                       child: Image.asset(
                         'assets/images/wallet_image.jpg',
-                        height: 350, // Increased height for better visibility
+                        height: 350,
                         fit: BoxFit.contain,
                       ),
                     ),
@@ -110,8 +89,13 @@ class _WalletSelectionPageState extends State<WalletSelectionPage> {
                     ),
                     child: Column(
                       children: [
+                        // Binance Button (Unchanged)
                         _buildWalletButton(
-                          onTap: () => _handleWalletSelection('binance'),
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Binance not available yet')),
+                            );
+                          },
                           imagePath: 'assets/images/binance_logo.png',
                           title: 'BINANCE',
                           color: Colors.orange,
@@ -120,10 +104,11 @@ class _WalletSelectionPageState extends State<WalletSelectionPage> {
                           color: Colors.black54,
                           height: 40,
                         ),
+                        // MetaMask Button (Replaces Bybit)
                         _buildWalletButton(
-                          onTap: () => _handleWalletSelection('bybit'),
-                          imagePath: 'assets/images/bybit.png',
-                          title: 'BYBIT',
+                          onTap: _handleMetaMaskSelection,
+                          imagePath: 'assets/images/Metamask-icon.png', // Replace with MetaMask logo
+                          title: 'METAMASK',
                           color: Colors.blue,
                         ),
                       ],
@@ -164,7 +149,6 @@ class _WalletSelectionPageState extends State<WalletSelectionPage> {
       ),
       child: Row(
         children: [
-          // Show the image if provided
           Container(
             width: 40,
             height: 40,

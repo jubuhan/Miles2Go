@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:google_place/google_place.dart';
-import 'dart:math' as math;
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/location_model.dart';
 import './bottom_navigation.dart';
+import '../services/location_service.dart';
+import '../widgets/location_widgets.dart';
 
 class PublishRideScreen extends StatefulWidget {
-  const PublishRideScreen({super.key});
+  final Map<String, dynamic> selectedVehicle;
+  
+  const PublishRideScreen({
+    Key? key,
+    required this.selectedVehicle,
+  }) : super(key: key);
 
   @override
   State<PublishRideScreen> createState() => _PublishRideScreenState();
@@ -21,31 +26,30 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   final TextEditingController _fromController = TextEditingController();
   final TextEditingController _toController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
+  final TextEditingController _stopController = TextEditingController();
   
-  // Location Services
-  late final GooglePlace _googlePlace;
-  Position? _currentPosition;
+  // Services
+  late final LocationService _locationService;
   
   // Location State
   LocationModel? _fromLocation;
   LocationModel? _toLocation;
+  List<LocationModel> _stops = []; // User-selected intermediate stops
   String? _selectedDate;
+  TimeOfDay? _selectedTime;
   Set<Marker> _markers = {};
-  Set<Polyline> _polylines = {}; // For storing route polylines
+  Set<Polyline> _polylines = {};
   List<AutocompletePrediction> _predictions = [];
   bool _isLoading = false;
-  bool _isLoadingRoute = false; // For route loading indicator
+  bool _isLoadingRoute = false;
+  bool _isAddingStop = false; // Flag to indicate stop-adding mode
   
   // Navigation state
   int _selectedIndex = 2; // Set to 2 for Rides tab
 
-  // Constants
-  static const _defaultZoom = 15.0;
-  static const _defaultMapPadding = 100.0;
-  static const _apiKey = 'AIzaSyA-qhXwh2ygO9JRbQ_22gc9WRf_Xp9Unow'; // Move to secure config
-
   // Route options
   List<Map<String, dynamic>> _availableRoutes = [];
+  int _passengerCount = 1;
   int _selectedRouteIndex = 0;
   List<Color> _routeColors = [
     Colors.blue,
@@ -54,87 +58,32 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     Colors.purple,
   ];
   
-  // Manual Google polyline decoder function
-  List<LatLng> _decodePolyline(String encoded) {
-    List<LatLng> poly = [];
-    int index = 0, len = encoded.length;
-    int lat = 0, lng = 0;
-
-    while (index < len) {
-      int b, shift = 0, result = 0;
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-      lat += dlat;
-
-      shift = 0;
-      result = 0;
-      do {
-        b = encoded.codeUnitAt(index++) - 63;
-        result |= (b & 0x1f) << shift;
-        shift += 5;
-      } while (b >= 0x20);
-      int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
-      lng += dlng;
-
-      final p = LatLng((lat / 1E5).toDouble(), (lng / 1E5).toDouble());
-      poly.add(p);
-    }
-    return poly;
-  }
-
   @override
   void initState() {
     super.initState();
-    _googlePlace = GooglePlace(_apiKey);
+    _locationService = LocationService();
     _initializeLocation();
+    
+    // Set initial passenger count based on vehicle seats
+    if (widget.selectedVehicle.containsKey('seats')) {
+      final vehicleSeats = int.tryParse(widget.selectedVehicle['seats'].toString()) ?? 1;
+      setState(() {
+        _passengerCount = vehicleSeats > 1 ? vehicleSeats - 1 : 1; // -1 for the driver
+      });
+    }
   }
 
   Future<void> _initializeLocation() async {
     setState(() => _isLoading = true);
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        _showError('Please enable location services');
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          _showError('Location permission denied');
-          setState(() => _isLoading = false);
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        _showError('Location permissions permanently denied');
-        setState(() => _isLoading = false);
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high
-      );
-      
-      if (mounted) {
-        setState(() {
-          _currentPosition = position;
-          _isLoading = false;
-          // We don't add a marker for current location
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _showError('Failed to initialize location: $e');
-      }
+    
+    final position = await _locationService.initializeLocation(_showError);
+    
+    if (position != null && mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    } else if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -142,11 +91,17 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     required String id,
     required LatLng position,
     required String title,
+    BitmapDescriptor? icon,
   }) {
     final marker = Marker(
       markerId: MarkerId(id),
       position: position,
       infoWindow: InfoWindow(title: title),
+      icon: icon ?? BitmapDescriptor.defaultMarker,
+      draggable: id.startsWith('stop_'), // Only stops are draggable
+      onDragEnd: id.startsWith('stop_') 
+        ? (newPosition) => _updateStopPosition(id, newPosition) 
+        : null,
     );
 
     setState(() {
@@ -155,30 +110,29 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     });
   }
 
-  Future<void> _searchPlaces(String query) async {
-    // Don't search if query is empty
-    if (query.isEmpty) {
-      setState(() => _predictions = []);
-      return;
+  // Update stop position after dragging
+  void _updateStopPosition(String markerId, LatLng newPosition) {
+    // Extract the stop index from markerId (assuming format "stop_X")
+    final index = int.tryParse(markerId.split('_')[1]);
+    if (index != null && index < _stops.length) {
+      setState(() {
+        // Update the stop with the new position
+        _stops[index] = LocationModel(
+          name: _stops[index].name,
+          latitude: newPosition.latitude,
+          longitude: newPosition.longitude,
+        );
+      });
+      
+      // Recalculate routes with the updated stop
+      _getRoutes();
     }
+  }
 
-    // Search for places
-    try {
-      final result = await _googlePlace.autocomplete.get(query);
-      if (mounted) {
-        setState(() {
-          if (result != null && result.predictions != null) {
-            _predictions = result.predictions!;
-          } else {
-            _predictions = [];
-          }
-        });
-      }
-    } catch (e) {
-      debugPrint('Error searching places: $e');
-      if (mounted) {
-        setState(() => _predictions = []);
-      }
+  Future<void> _searchPlaces(String query) async {
+    final predictions = await _locationService.searchPlaces(query);
+    if (mounted) {
+      setState(() => _predictions = predictions);
     }
   }
 
@@ -186,65 +140,61 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     AutocompletePrediction prediction,
     bool isOrigin,
   ) async {
-    try {
-      final details = await _googlePlace.details.get(prediction.placeId!);
-      if (details?.result == null || 
-          details!.result!.geometry?.location?.lat == null || 
-          details.result!.geometry?.location?.lng == null) {
-        _showError('Could not get location details');
-        return;
-      }
-
-      final lat = details.result!.geometry!.location!.lat!;
-      final lng = details.result!.geometry!.location!.lng!;
-      
-      final location = LocationModel(
-        name: prediction.description!,
-        latitude: lat,
-        longitude: lng,
-      );
-
-      setState(() {
-        if (isOrigin) {
-          _fromLocation = location;
-          _fromController.text = location.name;
-          _addMarker(
-            id: 'origin',
-            position: LatLng(lat, lng),
-            title: 'Pick-up Location'
-          );
-        } else {
-          _toLocation = location;
-          _toController.text = location.name;
-          _addMarker(
-            id: 'destination',
-            position: LatLng(lat, lng),
-            title: 'Drop-off Location'
-          );
-        }
-      });
-
-      if (_fromLocation != null && _toLocation != null) {
-        // Get routes when both locations are set
-        await _getRoutes();
-        _fitMapToBounds();
+    final location = await _locationService.getLocationFromPrediction(
+      prediction, 
+      _showError
+    );
+    
+    if (location == null) return;
+    
+    setState(() {
+      if (_isAddingStop) {
+        // Add as a stop
+        _stops.add(location);
+        _stopController.clear();
+        _addMarker(
+          id: 'stop_${_stops.length - 1}',
+          position: LatLng(location.latitude, location.longitude),
+          title: 'Stop ${_stops.length}',
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        );
+        _isAddingStop = false;
+      } else if (isOrigin) {
+        _fromLocation = location;
+        _fromController.text = location.name;
+        _addMarker(
+          id: 'origin',
+          position: LatLng(location.latitude, location.longitude),
+          title: 'Pick-up Location',
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+        );
       } else {
-        _animateToLocation(lat, lng);
+        _toLocation = location;
+        _toController.text = location.name;
+        _addMarker(
+          id: 'destination',
+          position: LatLng(location.latitude, location.longitude),
+          title: 'Drop-off Location',
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
+        );
       }
+    });
 
-      // Clear the search results
-      setState(() => _predictions = []);
-    } catch (e) {
-      debugPrint('Error selecting location: $e');
-      _showError('Error selecting location');
+    if (_fromLocation != null && _toLocation != null) {
+      await _getRoutes();
+      _fitMapToBounds();
+    } else {
+      _animateToLocation(location.latitude, location.longitude);
     }
+
+    setState(() => _predictions = []);
   }
 
   void _animateToLocation(double lat, double lng) {
     _mapController?.animateCamera(
       CameraUpdate.newLatLngZoom(
         LatLng(lat, lng),
-        _defaultZoom,
+        LocationService.defaultZoom,
       ),
     );
   }
@@ -252,27 +202,18 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   void _fitMapToBounds() {
     if (_fromLocation == null || _toLocation == null) return;
 
-    final southwest = LatLng(
-      math.min(_fromLocation!.latitude, _toLocation!.latitude),
-      math.min(_fromLocation!.longitude, _toLocation!.longitude),
-    );
-    
-    final northeast = LatLng(
-      math.max(_fromLocation!.latitude, _toLocation!.latitude),
-      math.max(_fromLocation!.longitude, _toLocation!.longitude),
-    );
-    
-    final bounds = LatLngBounds(
-      southwest: southwest,
-      northeast: northeast,
-    );
+    // Create a list of all points to include in bounds
+    List<LocationModel> allLocations = [_fromLocation!, _toLocation!];
+    allLocations.addAll(_stops);
+
+    // Calculate bounds that include all points
+    final bounds = _locationService.getBoundsForMultipleLocations(allLocations);
 
     _mapController?.animateCamera(
-      CameraUpdate.newLatLngBounds(bounds, _defaultMapPadding),
+      CameraUpdate.newLatLngBounds(bounds, LocationService.defaultMapPadding),
     );
   }
 
-  // Function to get routes between origin and destination
   Future<void> _getRoutes() async {
     if (_fromLocation == null || _toLocation == null) {
       return;
@@ -284,57 +225,91 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
       _availableRoutes = [];
     });
 
-    try {
-      // Make the HTTP request to the Directions API
-      final origin = '${_fromLocation!.latitude},${_fromLocation!.longitude}';
-      final destination = '${_toLocation!.latitude},${_toLocation!.longitude}';
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/directions/json?'
-        'origin=$origin&'
-        'destination=$destination&'
-        'alternatives=true&'
-        'key=$_apiKey'
+    // If there are stops, use waypoints routing
+    if (_stops.isNotEmpty) {
+      final route = await _locationService.getRouteWithWaypoints(
+        _fromLocation!,
+        _toLocation!,
+        _stops,
+        _showError,
       );
 
-      final response = await http.get(url);
-      final data = json.decode(response.body);
-
-      if (data['status'] != 'OK') {
-        _showError('Could not get directions: ${data['status']}');
+      if (route == null) {
         setState(() => _isLoadingRoute = false);
         return;
       }
 
-      // Parse routes
-      final routes = data['routes'] as List;
+      // Add color to our route
+      route['color'] = _routeColors[0];
+
+      // Create a polyline for this route
+      final polylineCoordinates = _locationService.decodePolyline(route['points']);
+      final polyline = Polyline(
+        polylineId: PolylineId('route_0'),
+        color: _routeColors[0],
+        points: polylineCoordinates,
+        width: 5,
+      );
+
+      // If the API returned a waypoint order, reorder the stops
+      if (route.containsKey('waypointOrder') && route['waypointOrder'] != null) {
+        List<int> waypointOrder = List<int>.from(route['waypointOrder']);
+        List<LocationModel> reorderedStops = [];
+        
+        // Create a new ordered list based on the waypoint_order
+        for (int i = 0; i < waypointOrder.length; i++) {
+          int originalIndex = waypointOrder[i];
+          if (originalIndex < _stops.length) {
+            reorderedStops.add(_stops[originalIndex]);
+          }
+        }
+        
+        // Replace stops with reordered stops if we got all of them
+        if (reorderedStops.length == _stops.length) {
+          setState(() {
+            _stops = reorderedStops;
+            
+            // Recreate markers to update the numbering
+            for (int i = 0; i < _stops.length; i++) {
+              _markers.removeWhere((m) => m.markerId.value == 'stop_$i');
+              _addMarker(
+                id: 'stop_$i',
+                position: LatLng(_stops[i].latitude, _stops[i].longitude),
+                title: 'Stop ${i + 1}',
+                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+              );
+            }
+          });
+        }
+      }
+
+      setState(() {
+        _availableRoutes = [route];
+        _polylines = {polyline};
+        _selectedRouteIndex = 0;
+        _isLoadingRoute = false;
+      });
+    } else {
+      // Original behavior - get multiple routes without stops
+      final routes = await _locationService.getRoutes(
+        _fromLocation!,
+        _toLocation!,
+        _showError,
+      );
+
       if (routes.isEmpty) {
-        _showError('No routes found');
         setState(() => _isLoadingRoute = false);
         return;
       }
 
-      // Store route information
-      final newRoutes = <Map<String, dynamic>>[];
       final newPolylines = <Polyline>{};
 
       for (int i = 0; i < routes.length; i++) {
         final route = routes[i];
-        final legs = route['legs'] as List;
-        final leg = legs[0];
-        
-        // Extract route info
-        final distance = leg['distance']['text'];
-        final duration = leg['duration']['text'];
-        // Get the encoded polyline points
-        final String encodedPolyline = route['overview_polyline']['points'];
-        
-        // Decode the polyline points manually
-        final List<LatLng> polylineCoordinates = _decodePolyline(encodedPolyline);
-
-        // Choose color for this route
         final color = _routeColors[i % _routeColors.length];
-            
+        
         // Create a polyline for this route
+        final polylineCoordinates = _locationService.decodePolyline(route['points']);
         final polyline = Polyline(
           polylineId: PolylineId('route_$i'),
           color: color,
@@ -347,29 +322,48 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
         
         newPolylines.add(polyline);
         
-        // Add route info to our list
-        newRoutes.add({
-          'index': i,
-          'distance': distance,
-          'duration': duration,
-          'summary': route['summary'],
-          'color': color,
-        });
+        // Add color to our routes info
+        route['color'] = color;
       }
 
       setState(() {
-        _availableRoutes = newRoutes;
+        _availableRoutes = routes;
         _polylines = newPolylines;
         _isLoadingRoute = false;
       });
-    } catch (e) {
-      debugPrint('Error getting routes: $e');
-      _showError('Error getting routes');
-      setState(() => _isLoadingRoute = false);
     }
   }
 
-  // Update the polyline style when a different route is selected
+  void _addStop() {
+    setState(() {
+      _isAddingStop = true;
+      _stopController.clear();
+    });
+  }
+
+  void _removeStop(int index) {
+    setState(() {
+      _stops.removeAt(index);
+      _markers.removeWhere((m) => m.markerId.value == 'stop_$index');
+      
+      // Renumber remaining stops
+      for (int i = index; i < _stops.length; i++) {
+        _markers.removeWhere((m) => m.markerId.value == 'stop_${i+1}');
+        _addMarker(
+          id: 'stop_$i',
+          position: LatLng(_stops[i].latitude, _stops[i].longitude),
+          title: 'Stop ${i+1}',
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        );
+      }
+    });
+    
+    // Recalculate routes without this stop
+    if (_fromLocation != null && _toLocation != null) {
+      _getRoutes();
+    }
+  }
+
   void _selectRoute(int index) {
     if (index >= _availableRoutes.length) return;
     
@@ -398,14 +392,15 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   }
 
   void _useCurrentLocation(bool isOrigin) async {
-    if (_currentPosition == null) {
+    if (_locationService.currentPosition == null) {
       _showError('Current location not available');
       return;
     }
 
     try {
-      final lat = _currentPosition!.latitude;
-      final lng = _currentPosition!.longitude;
+      final position = _locationService.currentPosition!;
+      final lat = position.latitude;
+      final lng = position.longitude;
       
       final location = LocationModel(
         name: 'Current Location',
@@ -414,13 +409,25 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
       );
 
       setState(() {
-        if (isOrigin) {
+        if (_isAddingStop) {
+          // Add as a stop
+          _stops.add(location);
+          _stopController.clear();
+          _addMarker(
+            id: 'stop_${_stops.length - 1}',
+            position: LatLng(lat, lng),
+            title: 'Stop ${_stops.length}',
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          );
+          _isAddingStop = false;
+        } else if (isOrigin) {
           _fromLocation = location;
           _fromController.text = location.name;
           _addMarker(
             id: 'origin',
             position: LatLng(lat, lng),
-            title: 'Pick-up Location'
+            title: 'Pick-up Location',
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
           );
         } else {
           _toLocation = location;
@@ -428,7 +435,8 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
           _addMarker(
             id: 'destination',
             position: LatLng(lat, lng),
-            title: 'Drop-off Location'
+            title: 'Drop-off Location',
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
           );
         }
       });
@@ -440,6 +448,42 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     } catch (e) {
       debugPrint('Error using current location: $e');
       _showError('Error using current location');
+    }
+  }
+
+  // Enable map tap for adding stops
+  void _handleMapTap(LatLng position) async {
+    if (!_isAddingStop) return;
+    
+    try {
+      // Get address from tapped coordinates
+      final placemark = await _locationService.getAddressFromLatLng(position);
+      
+      final location = LocationModel(
+        name: placemark ?? "Stop ${_stops.length + 1}",
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      
+      setState(() {
+        _stops.add(location);
+        _stopController.clear();
+        _addMarker(
+          id: 'stop_${_stops.length - 1}',
+          position: position,
+          title: 'Stop ${_stops.length}',
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        );
+        _isAddingStop = false;
+      });
+      
+      if (_fromLocation != null && _toLocation != null) {
+        await _getRoutes();
+        _fitMapToBounds();
+      }
+    } catch (e) {
+      debugPrint('Error adding stop from map tap: $e');
+      _showError('Error adding stop');
     }
   }
 
@@ -470,15 +514,151 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
       });
     }
   }
+  
+  Future<void> _selectTime() async {
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.white,
+              onPrimary: Color(0xFF1A3A4A),
+              surface: Color(0xFF1A3A4A),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
 
-  void _publishRide() {
-    if (_fromLocation == null || _toLocation == null || _selectedDate == null || _amountController.text.isEmpty) {
-      _showError('Please fill in all fields');
+    if (time != null) {
+      setState(() {
+        _selectedTime = time;
+      });
+    }
+  }
+
+  Future<String> _getUserName(String userId) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      
+      if (userDoc.exists && userDoc.data()!.containsKey('userName')) {
+        return userDoc.data()!['userName'];
+      }
+      return 'Unknown User';
+    } catch (e) {
+      print('Error fetching username: $e');
+      return 'Unknown User';
+    }
+  }
+
+  void _publishRide() async {
+    if (_fromLocation == null || _toLocation == null || 
+        _selectedDate == null || _selectedTime == null || _amountController.text.isEmpty) {
+      _showError('Please fill in all fields including time');
       return;
     }
 
-    // Here you would implement the ride publishing logic
-    _showSuccess('Your ride has been published successfully!');
+    if (_availableRoutes.isEmpty || _selectedRouteIndex >= _availableRoutes.length) {
+      _showError('No valid route selected');
+      return;
+    }
+
+    try {
+      setState(() => _isLoading = true);
+      
+      // Get current user ID
+      final userId = FirebaseAuth.instance.currentUser!.uid;
+      
+      // Get the selected route
+      final selectedRoute = _availableRoutes[_selectedRouteIndex];
+      
+      // Create a new published ride document
+      await FirebaseFirestore.instance.collection('publishedRides').add({
+        // User information (by reference)
+        'userId': userId,
+        'userName': await _getUserName(userId),
+        
+        // Vehicle information (by reference)
+        'vehicleId': widget.selectedVehicle['id'] ?? '',
+        'vehicleDetails': {
+          'model': widget.selectedVehicle['model'] ?? '',
+          'plate': widget.selectedVehicle['plate'] ?? '',
+          'vehicleName': widget.selectedVehicle['vehicleName'] ?? '',
+          'vehicleType': widget.selectedVehicle['vehicleType'] ?? '',
+          'seats': widget.selectedVehicle['seats'] ?? '1',
+        },
+        
+        // Route information
+        'from': {
+          'name': _fromLocation!.name,
+          'latitude': _fromLocation!.latitude,
+          'longitude': _fromLocation!.longitude,
+        },
+        'to': {
+          'name': _toLocation!.name,
+          'latitude': _toLocation!.latitude,
+          'longitude': _toLocation!.longitude,
+        },
+        'intermediatePoints': _stops.map((stop) => {
+          'name': stop.name,
+          'latitude': stop.latitude,
+          'longitude': stop.longitude,
+        }).toList(),
+        
+        // Ride details
+        'date': _selectedDate,
+        'time': _selectedTime != null ? '${_selectedTime!.hour}:${_selectedTime!.minute.toString().padLeft(2, '0')}' : '',
+        'amount': double.tryParse(_amountController.text) ?? 0.0,
+        'passengerCount': _passengerCount,
+        'routeEncodedPolyline': selectedRoute['points'],
+        'routeSummary': selectedRoute['summary'],
+        'routeDistance': selectedRoute['distance'],
+        'routeDuration': selectedRoute['duration'],
+        
+        // Metadata
+        'createdAt': FieldValue.serverTimestamp(),
+        'status': 'active',
+        'bookedSeats': 0,
+        'availableSeats': _passengerCount,
+      });
+      
+      setState(() => _isLoading = false);
+      _showSuccess('Your ride has been published successfully!');
+      
+      // Navigate back to the previous screen
+      Navigator.pop(context);
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showError('Failed to publish ride: ${e.toString()}');
+    }
+  }
+
+  void _decrementPassengers() {
+    if (_passengerCount > 1) {
+      setState(() {
+        _passengerCount--;
+      });
+    }
+  }
+
+  void _incrementPassengers() {
+    // Get maximum seats from vehicle
+    final maxSeats = int.tryParse(widget.selectedVehicle['seats'].toString()) ?? 8;
+    // Allow one less than total (accounting for driver)
+    final passengerLimit = maxSeats > 1 ? maxSeats - 1 : 1;
+    
+    if (_passengerCount < passengerLimit) {
+      setState(() {
+        _passengerCount++;
+      });
+    }
   }
 
   void _showError(String message) {
@@ -509,31 +689,36 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     });
     
     // Add navigation logic here if needed
-    // For demonstration, we're just updating the selected index
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Publish Ride'),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1A3A4A),
+        backgroundColor:  Colors.transparent,
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      backgroundColor: const Color(0xFF1A3A4A),
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Stack(
           children: [
             _buildMap(),
             _buildPublishPanel(),
-            if (_predictions.isNotEmpty) _buildPredictionsList(),
-            if (_isLoadingRoute) _buildLoadingIndicator(),
+            if (_predictions.isNotEmpty) 
+              LocationWidgets.buildPredictionsList(
+                predictions: _predictions,
+                onSelect: _handleLocationSelect,
+                isOrigin: _isAddingStop ? false : _fromController.selection.isValid,
+                top: 230,
+              ),
+            if (_isLoading || _isLoadingRoute) _buildLoadingIndicator(),
+            if (_isAddingStop) _buildAddingStopOverlay(),
           ],
         ),
       ),
@@ -541,28 +726,95 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
       ),
+      floatingActionButton: _isAddingStop ? FloatingActionButton(
+        backgroundColor: Colors.red,
+        child: Icon(Icons.close),
+        onPressed: () {
+          setState(() {
+            _isAddingStop = false;
+            _stopController.clear();
+          });
+        },
+      ) : null,
+    );
+  }
+
+  Widget _buildAddingStopOverlay() {
+    return Positioned(
+      top: 50,
+      left: 0,
+      right: 0,
+      child: Container(
+        margin: EdgeInsets.symmetric(horizontal: 16),
+        padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 5,
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.place, color: Colors.green),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Tap on the map to add a stop or search below',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildMap() {
-    if (_currentPosition == null) {
-      return const Center(
-        child: CircularProgressIndicator(color: Colors.white),
-      );
-    }
-
     return GoogleMap(
-      onMapCreated: (controller) => _mapController = controller,
+      onMapCreated: (controller) {
+        _mapController = controller;
+        // Apply a dark map style (optional)
+        _mapController?.setMapStyle('''
+          [
+            {
+              "featureType": "all",
+              "elementType": "labels.text.fill",
+              "stylers": [{"color": "#7c93a3"},{"lightness": "-10"}]
+            },
+            {
+              "featureType": "administrative.country",
+              "elementType": "geometry",
+              "stylers": [{"visibility": "on"}]
+            },
+            {
+              "featureType": "administrative.country",
+              "elementType": "geometry.stroke",
+              "stylers": [{"color": "#a0a4a5"}]
+            }
+          ]
+        ''');
+      },
       initialCameraPosition: CameraPosition(
-        target: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-        zoom: _defaultZoom,
+        target: _locationService.currentPosition != null 
+            ? LatLng(_locationService.currentPosition!.latitude, _locationService.currentPosition!.longitude)
+            : const LatLng(0, 0), // Default position will be updated once location is available
+        zoom: LocationService.defaultZoom,
       ),
       markers: _markers,
-      polylines: _polylines, // Add polylines to the map
-      myLocationEnabled: true, // Keep the blue dot for current location
-      myLocationButtonEnabled: true, // Keep the button to center on current location
+      polylines: _polylines,
+      myLocationEnabled: true,
+      myLocationButtonEnabled: true,
       mapToolbarEnabled: false,
+      mapType: MapType.normal,
+      compassEnabled: true,
       padding: const EdgeInsets.only(bottom: 300),
+      liteModeEnabled: false, // Set true for very slow devices
+      zoomControlsEnabled: false, // Hide default zoom controls for cleaner UI
+      onTap: _isAddingStop ? _handleMapTap : null, // Enable map tapping only when adding stops
     );
   }
 
@@ -585,7 +837,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
               ),
             ],
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(
@@ -598,7 +850,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
               ),
               SizedBox(width: 10),
               Text(
-                'Loading routes...',
+                _isLoading ? 'Publishing ride...' : 'Loading routes...',
                 style: TextStyle(color: Color(0xFF1A3A4A)),
               ),
             ],
@@ -630,7 +882,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildDragHandle(),
+                LocationWidgets.buildDragHandle(Colors.blue),
                 if (_availableRoutes.isNotEmpty) _buildRouteSelector(),
                 _buildPublishContent(),
               ],
@@ -736,42 +988,39 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     );
   }
 
-  Widget _buildDragHandle() {
-    return Center(
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 12),
-        width: 40,
-        height: 4,
-        decoration: BoxDecoration(
-          color: Colors.deepPurple,
-          borderRadius: BorderRadius.circular(2),
-        ),
-      ),
-    );
-  }
-
   Widget _buildPublishContent() {
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'PUBLISH A RIDE',
-            style: TextStyle(
-              color: Colors.black54,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+          Center(
+            child: const Text(
+              'PUBLISH A RIDE',
+              style: TextStyle(
+                color: Colors.blue,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          // Show the selected vehicle
+          _buildSelectedVehicle(),
+          const SizedBox(height: 16),
           _buildFromField(),
           const SizedBox(height: 16),
           _buildToField(),
           const SizedBox(height: 16),
+          _buildStopsSection(),
+          const SizedBox(height: 16),
           _buildDateField(),
           const SizedBox(height: 16),
+          _buildTimeField(),
+          const SizedBox(height: 16),
           _buildAmountField(),
+          const SizedBox(height: 16),
+          _buildPassengersSelector(),
           const SizedBox(height: 24),
           _buildPublishButton(),
         ],
@@ -779,98 +1028,234 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     );
   }
 
+  Widget _buildStopsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'STOPS',
+              style: TextStyle(
+                color: Colors.black54,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: _addStop,
+              icon: Icon(Icons.add_location, size: 16),
+              label: Text('Add Stop'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                textStyle: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 8),
+        _isAddingStop ? _buildStopField() : SizedBox(),
+        SizedBox(height: _isAddingStop ? 8 : 0),
+        _stops.isEmpty
+            ? Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Text(
+                    'No stops added yet. Add stops to create waypoints.',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                ),
+              )
+            : Column(
+                children: List.generate(
+                  _stops.length,
+                  (index) => _buildStopItem(index),
+                ),
+              ),
+      ],
+    );
+  }
+
+  Widget _buildStopField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green.withOpacity(0.5), width: 2),
+      ),
+      child: LocationWidgets.buildLocationField(
+        controller: _stopController,
+        hint: 'Enter a stop location or tap on map',
+        onChanged: (value) => _searchPlaces(value),
+        onTap: () => setState(() => _predictions = []),
+        onCurrentLocation: () => _useCurrentLocation(false),
+        borderColor: Colors.transparent,
+        prefixIcon: const Icon(Icons.place, color: Colors.green),
+      ),
+    );
+  }
+
+  Widget _buildStopItem(int index) {
+    final stop = _stops[index];
+    return Container(
+      margin: EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Colors.green,
+          child: Text('${index + 1}', style: TextStyle(color: Colors.white)),
+        ),
+        title: Text(
+          stop.name,
+          style: TextStyle(fontWeight: FontWeight.bold),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          '${stop.latitude.toStringAsFixed(5)}, ${stop.longitude.toStringAsFixed(5)}',
+          style: TextStyle(fontSize: 12),
+        ),
+        trailing: IconButton(
+          icon: Icon(Icons.delete, color: Colors.red),
+          onPressed: () => _removeStop(index),
+        ),
+        dense: true,
+      ),
+    );
+  }
+
+  Widget _buildSelectedVehicle() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'SELECTED VEHICLE',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue[800],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.directions_car, color: Colors.blue[700]),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "${widget.selectedVehicle['vehicleName']} (${widget.selectedVehicle['model']})",
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Plate: ${widget.selectedVehicle['plate']} • Type: ${widget.selectedVehicle['vehicleType']}",
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[700],
+            ),
+          ),
+          Text(
+            "Seats: ${widget.selectedVehicle['seats']}",
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[700],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFromField() {
-    return TextField(
-      controller: _fromController,
-      style: const TextStyle(color: Colors.black),
-      onChanged: (value) => _searchPlaces(value),
-      onTap: () => setState(() => _predictions = []),
-      decoration: InputDecoration(
-        labelText: 'FROM WHERE:',
-        labelStyle: const TextStyle(
-          color: Colors.black54,
-          fontWeight: FontWeight.bold,
-        ),
-        hintText: 'Your departure location',
-        hintStyle: TextStyle(color: Colors.black54),
-        filled: true,
-        fillColor: Colors.grey[100],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: LocationWidgets.buildLocationField(
+        controller: _fromController,
+        hint: 'Your departure location',
+        onChanged: (value) => _searchPlaces(value),
+        onTap: () => setState(() => _predictions = []),
+        onCurrentLocation: () => _useCurrentLocation(true),
+        borderColor: Colors.transparent,
         prefixIcon: const Icon(Icons.location_on, color: Colors.black54),
-        suffixIcon: IconButton(
-          icon: const Icon(Icons.my_location, color: Colors.black54),
-          onPressed: () => _useCurrentLocation(true),
-        ),
       ),
     );
   }
 
   Widget _buildToField() {
-    return TextField(
-      controller: _toController,
-      style: const TextStyle(color: Colors.black),
-      onChanged: (value) => _searchPlaces(value),
-      onTap: () => setState(() => _predictions = []),
-      decoration: InputDecoration(
-        labelText: 'WHERE TO:',
-        labelStyle: const TextStyle(
-          color: Colors.black54,
-          fontWeight: FontWeight.bold,
-        ),
-        hintText: 'Your destination',
-        hintStyle: TextStyle(color: Colors.black54),
-        filled: true,
-        fillColor: Colors.grey[100],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: LocationWidgets.buildLocationField(
+        controller: _toController,
+        hint: 'Your destination',
+        onChanged: (value) => _searchPlaces(value),
+        onTap: () => setState(() => _predictions = []),
+        onCurrentLocation: () => _useCurrentLocation(false),
+        borderColor: Colors.transparent,
         prefixIcon: const Icon(Icons.location_on, color: Colors.black54),
-        suffixIcon: IconButton(
-          icon: const Icon(Icons.place, color: Colors.black54),
-          onPressed: () {},
-        ),
+        suffixIcon: const Icon(Icons.place, color: Colors.black54),
       ),
     );
   }
 
   Widget _buildDateField() {
-    return GestureDetector(
+    return LocationWidgets.buildDateField(
+      selectedDate: _selectedDate,
       onTap: _selectDate,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'DATE OF DEPARTURE:',
-              style: TextStyle(
-                color: Colors.black54,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.calendar_today, color: Colors.black54),
-                const SizedBox(width: 12),
-                Text(
-                  _selectedDate ?? 'Select Date',
-                  style: TextStyle(
-                    color: _selectedDate != null ? Colors.black : Colors.black54,
-                  ),
+      borderColor: Colors.transparent,
+    );
+  }
+  
+  Widget _buildTimeField() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: InkWell(
+        onTap: _selectTime,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.access_time, color: Colors.black54),
+              const SizedBox(width: 12),
+              Text(
+                _selectedTime != null 
+                    ? '${_selectedTime!.format(context)}' 
+                    : 'Select time',
+                style: TextStyle(
+                  color: _selectedTime != null ? Colors.black : Colors.black54,
                 ),
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -900,82 +1285,36 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     );
   }
 
+  Widget _buildPassengersSelector() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: LocationWidgets.buildPassengersSelector(
+        passengerCount: _passengerCount,
+        onDecrement: _decrementPassengers,
+        onIncrement: _incrementPassengers,
+        borderColor: Colors.transparent,
+      ),
+    );
+  }
+
   Widget _buildPublishButton() {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
         onPressed: _publishRide,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.deepPurple,
+          backgroundColor: Colors.blue,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(25),
+            borderRadius: BorderRadius.circular(8),
           ),
           padding: const EdgeInsets.symmetric(vertical: 15),
         ),
         child: const Text(
           'PUBLISH RIDE',
-          style: TextStyle(color: Colors.white, fontSize: 16),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPredictionsList() {
-    final focusedField = FocusScope.of(context).focusedChild;
-    final isFromFocused = _fromController.selection.isValid;
-    final isToFocused = _toController.selection.isValid;
-    
-    // Only show predictions when a field is focused
-    if (!isFromFocused && !isToFocused) return const SizedBox.shrink();
-    
-    // Determine if we're searching for origin or destination
-    final isOrigin = isFromFocused;
-    
-    return Positioned(
-      top: 230, // Adjust this value based on your UI
-      left: 0,
-      right: 0,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: ListView.separated(
-          shrinkWrap: true,
-          physics: const ClampingScrollPhysics(),
-          itemCount: _predictions.length,
-          separatorBuilder: (context, index) => const Divider(height: 1),
-          itemBuilder: (context, index) {
-            final prediction = _predictions[index];
-            return ListTile(
-              leading: const Icon(Icons.location_on, color: Colors.black54),
-              title: Text(
-                prediction.structuredFormatting?.mainText ?? prediction.description ?? '',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF1A3A4A),
-                ),
-              ),
-              subtitle: Text(
-                prediction.structuredFormatting?.secondaryText ?? '',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                ),
-              ),
-              onTap: () {
-                FocusScope.of(context).unfocus();
-                _handleLocationSelect(prediction, isOrigin);
-              },
-            );
-          },
+          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
     );
@@ -986,6 +1325,7 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
     _fromController.dispose();
     _toController.dispose();
     _amountController.dispose();
+    _stopController.dispose();
     _mapController?.dispose();
     super.dispose();
   }

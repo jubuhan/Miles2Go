@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "879955119702",
+    "project_id": "sample2-bd1bb",
+    "storage_bucket": "sample2-bd1bb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:879955119702:android:2336d69733a92ea38775f7",
+        "android_client_info": {
+          "package_name": "com.example.miles2go"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBQ1SV_H56L20URrPVJN1L_pS3mCZlYfsM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

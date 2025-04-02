@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:miles2go/screens/profile_setting.dart';
 import 'package:miles2go/screens/ride_search_screen.dart';
 import 'package:miles2go/screens/service_selection_screen.dart';
+import 'package:miles2go/screens/my_rides_page.dart'; // Add this import
 
 class Miles2GoBottomNav extends StatelessWidget {
   final int currentIndex;
@@ -41,21 +42,21 @@ class Miles2GoBottomNav extends StatelessWidget {
             case 1:
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (context) => const RideSearchScreen()),
+                MaterialPageRoute(builder: (context) => RideSearchScreen()),  // Remove const
               );
               break;
-            // case 2:
-            //   Navigator.pushReplacement(
-            //     context,
-            //     MaterialPageRoute(builder: (context) => const MyRidesPage()),
-            //   );
-            //   break;
-             case 3:
-               Navigator.pushReplacement(
-                 context,
-                 MaterialPageRoute(builder: (context) =>  ProfileSettingsPage()),
-               );
-               break;
+            case 2:
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) =>  MyRidesPage()),
+              );
+              break;
+            case 3:
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => ProfileSettingsPage()),
+              );
+              break;
           }
         },
         backgroundColor: Colors.blue,
