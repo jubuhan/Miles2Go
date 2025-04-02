@@ -3,6 +3,7 @@ import 'package:miles2go/services/authservices.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:developer' show log;
 import 'package:miles2go/screens/service_selection_screen.dart';
+import 'package:miles2go/screens/EmailVerification.dart'; // Import the email verification page
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -90,23 +91,10 @@ class _LoginPageState extends State<LoginPage> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          color: Colors.black,
-          onPressed: () => Navigator.pop(context),
-        ),
+        // Remove back button from login screen since it's the initial screen
+        automaticallyImplyLeading: false,
       ),
       body: Container(
-        // decoration: BoxDecoration(
-        //   gradient: LinearGradient(
-        //     begin: Alignment.topCenter,
-        //     end: Alignment.bottomCenter,
-        //     colors: [
-        //       Colors.blue.shade900,
-        //       Colors.teal.shade800,
-        //     ],
-        //   ),
-        // ),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -120,8 +108,6 @@ class _LoginPageState extends State<LoginPage> {
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                       color: Colors.blue,
-                      // decoration: TextDecoration.underline,
-                      // decorationThickness: 2,
                     ),
                   ),
                   const SizedBox(height: 40),
@@ -155,7 +141,7 @@ class _LoginPageState extends State<LoginPage> {
                                 ),
                                 child: Text(
                                   _errorMessage!,
-                                  style: const TextStyle(color: Colors.white),
+                                  style: const TextStyle(color: Colors.red),
                                   textAlign: TextAlign.center,
                                 ),
                               ),
@@ -282,9 +268,13 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       TextButton(
                         onPressed: () {
-                          Navigator.pop(context);
-                          // Handle navigation to sign up page
-                         
+                          // Navigate to EmailVerificationPage instead of SignUpPage
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const EmailVerificationPage(),
+                            ),
+                          );
                         },
                         child: Text(
                           'Sign up',

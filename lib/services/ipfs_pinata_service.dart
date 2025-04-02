@@ -38,7 +38,7 @@ class IPFSPinataService {
     // Initialize blockchain service
     await initialize();
     
-    _firestore.collection('rideRequests').snapshots().listen((snapshot) {
+    _firestore.collection('rideHistory').snapshots().listen((snapshot) {
       for (var change in snapshot.docChanges) {
         final doc = change.doc;
         final data = doc.data();
@@ -132,7 +132,7 @@ if (blockchainCID != null) {
           print("Successfully stored CID on blockchain with transaction: $txHash");
           
           // Update the request with blockchain transaction info
-          await _firestore.collection('rideRequests').doc(requestId).update({
+          await _firestore.collection('rideHistory').doc(requestId).update({
             'blockchainTxHash': txHash,
             'blockchainTimestamp': FieldValue.serverTimestamp()
           });
@@ -288,7 +288,7 @@ if (blockchainCID != null) {
   Future<void> _storeIPFSReference(String userId, String rideId, String requestId, String cid) async {
     try {
       // Update ride request with the CID
-      await _firestore.collection('rideRequests').doc(requestId).update({
+      await _firestore.collection('rideHistory').doc(requestId).update({
         'ipfsCid': cid,
         'ipfsUploadedAt': FieldValue.serverTimestamp()
       });
