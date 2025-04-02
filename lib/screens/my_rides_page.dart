@@ -683,7 +683,7 @@ class _MyRidesPageState extends State<MyRidesPage> with SingleTickerProviderStat
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '₹${ride['amount'] ?? "0"}',
+                    'Sepolia eth ${ride['amount'] ?? "0"}',
                     style: const TextStyle(
                       color: Colors.blue,
                       fontSize: 16,

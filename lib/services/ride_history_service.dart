@@ -86,7 +86,7 @@ class RideHistoryService {
         
         historyEntry.addAll({
           'requestId': requestId,
-          'driverName': rideData['driverName'] ?? 'Driver',
+          'driverName': rideData['driverName'],
           'driverId': driverId,
           'pickupLocation': pickupLocation,
           'dropoffLocation': dropoffLocation,
@@ -100,7 +100,7 @@ class RideHistoryService {
           for (var passenger in rideData['acceptedPassengers']) {
             if (passenger is Map<String, dynamic>) {
               passengers.add({
-                'name': passenger['passengerName'] ?? 'Passenger',
+                'name': passenger['passengerName'],
                 'id': passenger['userId'] ?? '',
                 'requestId': passenger['requestId'] ?? '',
                 'paymentStatus': 'unpaid',

@@ -612,7 +612,7 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
         ? getSafe(ride, ['vehicleDetails', 'model']) 
         : 'Unknown';
     final String vehicleName = getSafe(ride, ['vehicleDetails', 'vehicleName']);
-    final String price = '₹${ride['amount'] ?? 0}';
+    final String price = 'Sepolia eth ${ride['amount'] ?? 0}';
 
     // Check if ride has intermediate stops
     bool hasIntermediateStops = false;

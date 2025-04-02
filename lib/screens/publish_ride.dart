@@ -1262,28 +1262,35 @@ class _PublishRideScreenState extends State<PublishRideScreen> {
   }
 
   Widget _buildAmountField() {
-    return TextField(
-      controller: _amountController,
-      style: const TextStyle(color: Colors.black),
-      keyboardType: TextInputType.number,
-      decoration: InputDecoration(
-        labelText: 'AMOUNT:',
-        labelStyle: const TextStyle(
-          color: Colors.black54,
-          fontWeight: FontWeight.bold,
-        ),
-        hintText: 'Enter the amount',
-        hintStyle: TextStyle(color: Colors.black54),
-        filled: true,
-        fillColor: Colors.grey[100],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
-        ),
-        prefixIcon: const Icon(Icons.attach_money, color: Colors.black54),
+  return TextField(
+    controller: _amountController,
+    style: const TextStyle(color: Colors.black),
+    keyboardType: TextInputType.number,
+    decoration: InputDecoration(
+      labelText: 'AMOUNT:',
+      labelStyle: const TextStyle(
+        color: Colors.black54,
+        fontWeight: FontWeight.bold,
       ),
-    );
-  }
+      hintText: 'Enter the amount',
+      hintStyle: TextStyle(color: Colors.black54),
+      filled: true,
+      fillColor: Colors.grey[100],
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide.none,
+      ),
+      prefix: Padding(
+        padding: const EdgeInsets.only(right: 8.0), // Adds spacing between text and input
+        child: Text(
+          "Sepolia eth",
+          style: TextStyle(color: Colors.black54, fontWeight: FontWeight.bold),
+        ),
+      ),
+    ),
+  );
+}
+
 
   Widget _buildPassengersSelector() {
     return Container(

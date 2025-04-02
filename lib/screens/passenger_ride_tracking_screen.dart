@@ -373,7 +373,7 @@ void initState() {
     }
     
     // Get driver contact info
-    final String driverName = _rideData!['driverName'] ?? 'Driver';
+    final String driverName = _rideData!['driverName'] ;
     final String? driverContact = _rideData!['driverContact'];
     
     if (driverContact == null || driverContact.isEmpty) {
@@ -620,7 +620,7 @@ void initState() {
         _isLoading = true;
       });
       
-      // Update the ride request
+      // Update the ride requestF
       await FirebaseFirestore.instance
           .collection('rideRequests')
           .doc(_requestId)

@@ -409,13 +409,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
                             fontSize: 16,
                           ),
                         ),
-                        Text(
-                          '\$${price.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                      Text(
+  'Sepolia eth ${price.toStringAsFixed(2)}',
+  style: const TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.bold,
+  ),
+),
+
                       ],
                     ),
                   ),
