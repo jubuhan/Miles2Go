@@ -106,7 +106,7 @@ packages:
     source: hosted
     version: "1.19.1"
   convert:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: convert
       sha256: b30acd5944035672bc15c6b7a8b47d773e41e2f17de064350988c5d02adb1c68
@@ -339,6 +339,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_web3:
+    dependency: "direct main"
+    description:
+      name: flutter_web3
+      sha256: d8bdcbead96352d9e4ee58ede7965f09a541472692ad61e72b0bd317005c08e9
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.9"
   flutter_web_plugins:
     dependency: transitive
     description: flutter
@@ -797,14 +805,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.10.1"
-  sprintf:
-    dependency: transitive
-    description:
-      name: sprintf
-      sha256: "1fc9ffe69d4df602376b52949af107d8f5703b77cda567c4d7d86a0693120f23"
-      url: "https://pub.dev"
-    source: hosted
-    version: "7.0.0"
   stack_trace:
     dependency: transitive
     description:
@@ -934,13 +934,13 @@ packages:
     source: hosted
     version: "3.1.4"
   uuid:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
       name: uuid
-      sha256: a5be9ef6618a7ac1e964353ef476418026db906c4facdedaa299b7a2e71690ff
+      sha256: "648e103079f7c64a36dc7d39369cabb358d377078a051d6ae2ad3aa539519313"
       url: "https://pub.dev"
     source: hosted
-    version: "4.5.1"
+    version: "3.0.7"
   vector_graphics:
     dependency: transitive
     description:
@@ -989,6 +989,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.0.13"
+  walletconnect_dart:
+    dependency: "direct main"
+    description:
+      name: walletconnect_dart
+      sha256: "6d69d3f7ed43b4a111458da0ba078f4ea291ff11328068c9cbf5cab3bd86593f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.11"
   walletconnect_flutter_v2:
     dependency: "direct main"
     description:
@@ -1014,7 +1022,7 @@ packages:
     source: hosted
     version: "2.7.3"
   web_socket_channel:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: web_socket_channel
       sha256: d88238e5eac9a42bb43ca4e721edba3c08c6354d4a53063afaa568516217621b

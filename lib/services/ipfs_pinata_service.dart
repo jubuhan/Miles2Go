@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:miles2go/services/blockchain_service.dart';
 
 class IPFSPinataService {
   // Pinata API credentials - Replace these with your actual Pinata API keys
@@ -16,29 +15,11 @@ class IPFSPinataService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   
-  // Blockchain service
-  final BlockchainService _blockchainService = BlockchainService();
-  bool _blockchainInitialized = false;
-  
-  // Initialize the service
-  Future<void> initialize() async {
-  if (!_blockchainInitialized) {
-    print("Initializing Blockchain Service...");
-    await _blockchainService.initialize();
-    _blockchainInitialized = true;
-    print("Blockchain Service Initialized");
-  }
-}
-
-  
   // Listen for ride request status changes
-  void listenForAcceptedRideRequests() async {
+  void listenForAcceptedRideRequests() {
     print("Starting to listen for ride request status changes");
     
-    // Initialize blockchain service
-    await initialize();
-    
-    _firestore.collection('rideHistory').snapshots().listen((snapshot) {
+    _firestore.collection('rideRequests').snapshots().listen((snapshot) {
       for (var change in snapshot.docChanges) {
         final doc = change.doc;
         final data = doc.data();
@@ -93,13 +74,6 @@ class IPFSPinataService {
       
       // Extract only essential request details
       final cleanRequestData = _extractEssentialRequestData(requestData);
-      final blockchainCID = await _blockchainService.getRideCIDFromBlockchain(rideId);
-if (blockchainCID != null) {
-    print("Blockchain CID for ride $rideId: $blockchainCID");
-} else {
-    print("Error: No CID found on blockchain for ride $rideId");
-}
-
       
       // Combine data for IPFS but keep it minimal
       final ipfsData = {
@@ -123,24 +97,6 @@ if (blockchainCID != null) {
         await _storeIPFSReference(user.uid, rideId, requestId, cid);
         
         print("CID reference stored successfully");
-        
-        // Store CID on blockchain
-        print("Storing CID on blockchain...");
-        final txHash = await _blockchainService.storeRideCIDOnBlockchain(rideId, cid);
-        
-        if (txHash != null) {
-          print("Successfully stored CID on blockchain with transaction: $txHash");
-          
-          // Update the request with blockchain transaction info
-          await _firestore.collection('rideHistory').doc(requestId).update({
-            'blockchainTxHash': txHash,
-            'blockchainTimestamp': FieldValue.serverTimestamp()
-          });
-          
-          print("Ride request updated with blockchain transaction info");
-        } else {
-          print("Failed to store CID on blockchain");
-        }
       } else {
         print("Failed to upload to IPFS: ${result['message']}");
       }
@@ -288,7 +244,7 @@ if (blockchainCID != null) {
   Future<void> _storeIPFSReference(String userId, String rideId, String requestId, String cid) async {
     try {
       // Update ride request with the CID
-      await _firestore.collection('rideHistory').doc(requestId).update({
+      await _firestore.collection('rideRequests').doc(requestId).update({
         'ipfsCid': cid,
         'ipfsUploadedAt': FieldValue.serverTimestamp()
       });
@@ -304,43 +260,6 @@ if (blockchainCID != null) {
     } catch (e) {
       print("Error storing CID reference: $e");
       throw Exception('Failed to store IPFS reference: $e');
-    }
-  }
-  
-  // Verify a CID on the blockchain
-  Future<bool> verifyCIDOnBlockchain(String rideId) async {
-    try {
-      await initialize();
-      
-      // Get the CID from Firebase
-      final querySnapshot = await _firestore
-          .collection('ipfsReferences')
-          .where('rideId', isEqualTo: rideId)
-          .limit(1)
-          .get();
-          
-      if (querySnapshot.docs.isEmpty) {
-        print("No IPFS reference found for ride $rideId");
-        return false;
-      }
-      
-      final storedCID = querySnapshot.docs.first.data()['cid'];
-      
-      // Get the CID from blockchain
-      final blockchainCID = await _blockchainService.getRideCIDFromBlockchain(rideId);
-      
-      if (blockchainCID == null) {
-        print("No CID found on blockchain for ride $rideId");
-        return false;
-      }
-      
-      // Compare the CIDs
-      final match = storedCID == blockchainCID;
-      print("CID verification for ride $rideId: ${match ? 'MATCH' : 'MISMATCH'}");
-      return match;
-    } catch (e) {
-      print("Error verifying CID on blockchain: $e");
-      return false;
     }
   }
 }

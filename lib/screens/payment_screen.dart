@@ -1,14 +1,18 @@
+import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/ride_history_service.dart';
+import '../services/block_service.dart'; // Assuming this is a typo and should be blockchain_service.dart
+import '../services/walletconnect.dart';
+import '../services/database_service.dart';
 import './bottom_navigation.dart';
 
 class PaymentScreen extends StatefulWidget {
   final String rideId;
   final String requestId;
   final Map<String, dynamic> rideData;
-  
+
   const PaymentScreen({
     Key? key,
     required this.rideId,
@@ -21,50 +25,71 @@ class PaymentScreen extends StatefulWidget {
 }
 
 class _PaymentScreenState extends State<PaymentScreen> {
-  int _selectedIndex = 1; // Set to 1 for Find Rides tab
+  int _selectedIndex = 1;
   bool _isLoading = false;
+  bool _processingPayment = false;
   final RideHistoryService _historyService = RideHistoryService();
+  final BlockchainService _blockchainService = BlockchainService();
+  final WalletConnectService _walletService = WalletConnectService();
+  final DatabaseServices _databaseServices = DatabaseServices();
   bool _rideHistorySaved = false;
-  
+  String _paymentStatus = '';
+
   @override
   void initState() {
     super.initState();
     _saveRideToHistory();
+    _initWalletConnect();
+    log('rideData: ${widget.rideData}');
   }
-  
+
+  Future<void> _initWalletConnect() async {
+  try {
+    debugPrint('Initializing wallet connection...');
+    await _walletService.initWalletConnect(
+      onSessionRestored: (address) {
+        debugPrint('Session restored with address: $address');
+        setState(() {}); // Refresh UI if wallet is connected
+      },
+    );
+  } catch (e) {
+    debugPrint('Error initializing WalletConnect: $e');
+    _showError('Failed to initialize wallet: $e');
+  }
+}
+
   Future<void> _saveRideToHistory() async {
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
       await _historyService.saveRideToHistory(
         rideId: widget.rideId,
         requestId: widget.requestId,
         isDriver: false,
       );
-      
+
       setState(() {
         _rideHistorySaved = true;
         _isLoading = false;
       });
     } catch (e) {
-      print('Error saving ride history: $e');
+      log('Error saving ride history: $e');
       _showError('Failed to save ride history');
-      
+
       setState(() {
         _isLoading = false;
       });
     }
   }
-  
+
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
-    // Add navigation logic here if needed
   }
-  
+
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -73,7 +98,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       ),
     );
   }
-  
+
   void _showSuccess(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -82,18 +107,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
       ),
     );
   }
-  
-  // Method to process payment (in a real app, this would connect to a payment gateway)
+
+  void _updatePaymentStatus(String status) {
+    setState(() {
+      _paymentStatus = status;
+    });
+  }
+
   Future<void> _processPayment() async {
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
-      // In a real app, you would process payment through a payment gateway here
-      // For now, we'll just show success and go back to home
-      
-      // Payment successful, update status
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         await _historyService.updatePaymentStatus(
@@ -103,43 +129,144 @@ class _PaymentScreenState extends State<PaymentScreen> {
           passengerId: user.uid,
         );
       }
-      
+
       setState(() {
         _isLoading = false;
       });
-      
+
       _showSuccess('Payment will be processed later.');
-      
-      // Navigate back to home after a short delay
+
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {
           Navigator.of(context).popUntil((route) => route.isFirst);
         }
       });
     } catch (e) {
-      print('Error processing payment: $e');
+      log('Error processing payment: $e');
       _showError('Payment processing failed: ${e.toString()}');
-      
+
       setState(() {
         _isLoading = false;
       });
     }
   }
-  
-  // Method to skip payment (pay later option)
+Future<void> _processCryptoPayment() async {
+  if (_processingPayment) return;
+
+  setState(() {
+    _processingPayment = true;
+    _paymentStatus = 'Preparing payment...';
+  });
+
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('User not authenticated');
+
+    if (!_rideHistorySaved) {
+      await _historyService.saveRideToHistory(
+        rideId: widget.rideId,
+        requestId: widget.requestId,
+        isDriver: false,
+      );
+      _rideHistorySaved = true;
+    }
+
+    if (!_walletService.isConnected) {
+      _updatePaymentStatus('Connecting wallet...');
+      await _walletService.connectWallet(_updatePaymentStatus);
+      if (!_walletService.isConnected) throw Exception('Failed to connect wallet');
+    }
+    log('Wallet connected: ${_walletService.walletAddress}');
+
+    final historyDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('rideHistory')
+        .doc(widget.rideId)
+        .get();
+    if (!historyDoc.exists) throw Exception('Ride history not found');
+
+    final historyData = historyDoc.data();
+    if (historyData == null) throw Exception('Ride history data is empty');
+
+    final driverId = historyData['driverId']?.toString();
+    if (driverId == null) throw Exception('Driver ID not found');
+
+    final driverData = await _databaseServices.getUserData(driverId);
+    if (driverData == null) throw Exception('Driver profile not found');
+
+    final driverWalletAddress = driverData['wallet']?['walletAddress'] ?? driverData['walletAddress'];
+    if (driverWalletAddress == null) throw Exception('Driver wallet address not available');
+
+    _updatePaymentStatus('Driver wallet: ${driverWalletAddress.substring(0, 10)}...');
+
+    double price = (widget.rideData['price'] is num ? widget.rideData['price'] : 0.0).toDouble();
+    final ethPrice = price * 0.0005;
+
+    _updatePaymentStatus('Processing ${ethPrice.toStringAsFixed(6)} ETH payment...');
+    final txHash = await _blockchainService.processRidePayment(
+      context: context,
+      rideId: widget.rideId,
+      driverWalletAddress: driverWalletAddress,
+      amountInEth: ethPrice,
+      logUpdate: _updatePaymentStatus,
+    );
+
+    if (txHash == null) throw Exception('Transaction failed or was rejected');
+
+    await _historyService.updatePaymentStatus(
+      rideId: widget.rideId,
+      requestId: widget.requestId,
+      isDriver: false,
+      passengerId: user.uid,
+    );
+
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).collection('payments').add({
+      'rideId': widget.rideId,
+      'amount': ethPrice,
+      'currency': 'ETH',
+      'driverWallet': driverWalletAddress.toLowerCase(),
+      'passengerWallet': _walletService.walletAddress!.toLowerCase(),
+      'txHash': txHash,
+      'status': 'pending',
+      'timestamp': FieldValue.serverTimestamp(),
+      'paymentType': 'crypto',
+      'network': 'sepolia',
+    });
+
+    await FirebaseFirestore.instance.collection('rides').doc(widget.rideId).set({
+      'paymentStatus': 'paid',
+      'paymentMethod': 'crypto',
+      'paymentTxHash': txHash,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    setState(() {
+      _processingPayment = false;
+      _paymentStatus = '';
+    });
+    _showSuccess('Payment successful! Tx: ${txHash.substring(0, 10)}...');
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+    });
+  } catch (e) {
+    log('Crypto payment error: $e, Stack: ${StackTrace.current}');
+    _showError('Payment failed: $e');
+    setState(() {
+      _processingPayment = false;
+      _paymentStatus = '';
+    });
+  }
+}
   void _skipPayment() {
     _showSuccess('You can pay later from your ride history');
-    
-    // Navigate back to home
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
-  
+
   @override
   Widget build(BuildContext context) {
-    // Calculate ride info - with safe handling of types
     final String driverName = widget.rideData['driverName'] ?? 'Driver';
-    
-    // Safely handle price which might be a string or a number
+
     double price = 0.0;
     if (widget.rideData['price'] is num) {
       price = (widget.rideData['price'] as num).toDouble();
@@ -150,8 +277,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     } else if (widget.rideData['pricePerSeat'] is String) {
       price = double.tryParse(widget.rideData['pricePerSeat']) ?? 0.0;
     }
-    
-    // Safely handle pickup location
+
+    final ethAmount = price * 0.0005;
+
     String pickupLocation = '';
     if (widget.rideData.containsKey('pickupLocation')) {
       if (widget.rideData['pickupLocation'] is Map) {
@@ -164,8 +292,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     } else {
       pickupLocation = 'Pickup location';
     }
-    
-    // Safely handle destination
+
     String destination = '';
     if (widget.rideData.containsKey('to')) {
       if (widget.rideData['to'] is Map) {
@@ -176,7 +303,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     } else {
       destination = 'Destination';
     }
-    
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -185,7 +312,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () {
-            // Show confirmation dialog
             showDialog(
               context: context,
               builder: (context) => AlertDialog(
@@ -222,7 +348,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Ride completed card
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -259,10 +384,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ],
                     ),
                   ),
-                  
                   const SizedBox(height: 24),
-                  
-                  // Ride summary
                   const Text(
                     'Ride Summary',
                     style: TextStyle(
@@ -271,8 +393,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
-                  // Driver info
                   Row(
                     children: [
                       CircleAvatar(
@@ -303,10 +423,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ),
                     ],
                   ),
-                  
                   const SizedBox(height: 16),
-                  
-                  // Route info
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -379,10 +496,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ],
                     ),
                   ),
-                  
                   const SizedBox(height: 24),
-                  
-                  // Payment details
                   const Text(
                     'Payment Details',
                     style: TextStyle(
@@ -391,8 +505,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
-                  // Amount
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -400,39 +512,95 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.grey.shade300),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Column(
                       children: [
-                        const Text(
-                          'Total Amount',
-                          style: TextStyle(
-                            fontSize: 16,
-                          ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'USD Amount',
+                              style: TextStyle(
+                                fontSize: 16,
+                              ),
+                            ),
+                            Text(
+                              '\$${price.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          '\$${price.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        const SizedBox(height: 8),
+                        const Divider(),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'ETH Amount (Sepolia)',
+                              style: TextStyle(
+                                fontSize: 16,
+                              ),
+                            ),
+                            Text(
+                              '${ethAmount.toStringAsFixed(6)} ETH',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  
+                  if (_processingPayment)
+                    Container(
+                      margin: const EdgeInsets.only(top: 16),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade700),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              _paymentStatus,
+                              style: TextStyle(
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   const SizedBox(height: 32),
-                  
-                  // Payment buttons
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _processPayment,
+                    child: ElevatedButton.icon(
+                      onPressed: _processingPayment ? null : _processCryptoPayment,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
+                        backgroundColor: Colors.blue,
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        disabledBackgroundColor: Colors.blue.withOpacity(0.6),
                       ),
-                      child: const Text(
-                        'PAY NOW',
+                      icon: const Icon(Icons.currency_bitcoin, color: Colors.white),
+                      label: const Text(
+                        'PAY WITH ETH',
                         style: TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -441,13 +609,31 @@ class _PaymentScreenState extends State<PaymentScreen> {
                       ),
                     ),
                   ),
-                  
                   const SizedBox(height: 12),
-                  
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _processingPayment ? null : _processPayment,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        disabledBackgroundColor: Colors.green.withOpacity(0.6),
+                      ),
+                      child: const Text(
+                        'PAY WITH CASH',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
                     child: TextButton(
-                      onPressed: _skipPayment,
+                      onPressed: _processingPayment ? null : _skipPayment,
                       child: const Text(
                         'PAY LATER',
                         style: TextStyle(
@@ -461,12 +647,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 ],
               ),
             ),
-      bottomNavigationBar: _isLoading 
-        ? null 
-        : Miles2GoBottomNav(
-            currentIndex: _selectedIndex,
-            onTap: _onItemTapped,
-          ),
+      bottomNavigationBar: _isLoading
+          ? null
+          : Miles2GoBottomNav(
+              currentIndex: _selectedIndex,
+              onTap: _onItemTapped,
+            ),
     );
   }
 }

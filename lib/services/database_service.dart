@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 final currentlyLoggedUserId = FirebaseAuth.instance.currentUser?.uid;
 
 class DatabaseServices {
+  // final String? userId;
+
   DatabaseServices();
 
   // reference for the collections in firestore database
@@ -24,7 +26,7 @@ class DatabaseServices {
           "userName": userName,
           "email": email,
           "phoneNumber": phoneNumber, // Added phone number
-          "wallet": {}, // Fixed spelling from "waller" to "wallet"
+          "walletAddress": "",
           "vehicles": [],
         },
         SetOptions(

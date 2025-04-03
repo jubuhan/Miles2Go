@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart';
 import 'package:web3dart/web3dart.dart' as web3;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:web3dart/crypto.dart'; 
 
 class BlockchainService {
   // Alchemy node endpoint - replace with your Alchemy API URL
@@ -127,63 +126,53 @@ class BlockchainService {
   }
 
   // Store a ride CID on the blockchain
-  
   Future<String?> storeRideCIDOnBlockchain(String rideId, String ipfsCid) async {
-  try {
-    print('Storing CID $ipfsCid for ride $rideId on blockchain');
+    try {
+      print('Storing CID $ipfsCid for ride $rideId on blockchain');
 
-    // Ensure the service is initialized
-    await initialize();
+      // Ensure the service is initialized
+      await initialize();
 
-    // Fetch gas price dynamically
-    //final gasPrice = await _web3client.getGasPrice(); 
+      // Send transaction with gas limit and gas price
+      final transaction = await _web3client.sendTransaction(
+        _credentials,
+        web3.Transaction.callContract(
+          contract: _contract,
+          function: _storeRideCIDFunction,
+          parameters: [rideId, ipfsCid],
+          gasPrice: web3.EtherAmount.inWei(BigInt.from(2000000000)), // 2 Gwei
+          maxGas: 300000, // Increased gas limit
+        ),
+        chainId: 11155111, // Sepolia testnet
+      );
 
-    final nonce = await _web3client.getTransactionCount(
-      _credentials.address,
-       atBlock: web3.BlockNum.pending(),
-);
+      print('Transaction sent: $transaction');
 
-final transaction = await _web3client.sendTransaction(
-  _credentials,
-  web3.Transaction.callContract(
-    contract: _contract,
-    function: _storeRideCIDFunction,
-    parameters: [rideId, ipfsCid],
-    gasPrice: web3.EtherAmount.inWei(BigInt.from(20000000000)), // 20 Gwei
-    maxGas: 300000,
-    nonce: nonce, // Set correct nonce
-  ),
-  chainId: 11155111,
-);
+      // Wait for the transaction to be mined
+      print('Waiting for transaction to be mined...');
+      web3.TransactionReceipt? receipt;
+for (int i = 0; i < 20; i++) {
+        receipt = await _web3client.getTransactionReceipt(transaction);
+        if (receipt != null) break;
+        await Future.delayed(Duration(seconds: 5));
+      }
 
-    print('Transaction sent: $transaction');
+      if (receipt == null) {
+        print('Transaction not mined after timeout');
+        return null;
+      }
 
-    // Wait for the transaction to be mined
-    print('Waiting for transaction to be mined...');
-    web3.TransactionReceipt? receipt;
-    for (int i = 0; i < 20; i++) {
-      receipt = await _web3client.getTransactionReceipt(transaction);
-      if (receipt != null) break;
-      await Future.delayed(Duration(seconds: 5));
-    }
+      print('Transaction mined: ${receipt.blockHash}');
 
-    if (receipt == null) {
-      print('Transaction not mined after timeout');
+      // Update Firestore with blockchain transaction info
+      await _updateFirestoreWithBlockchainInfo(rideId, ipfsCid, transaction, receipt);
+
+      return transaction;
+    } catch (e) {
+      print('Error storing CID on blockchain: $e');
       return null;
     }
-
-    print('Transaction mined: ${bytesToHex(receipt.blockHash, include0x: true)}');// Fix block hash output
-
-    // Update Firestore with blockchain transaction info
-    await _updateFirestoreWithBlockchainInfo(rideId, ipfsCid, transaction, receipt);
-
-    return transaction;
-  } catch (e) {
-    print('Error storing CID on blockchain: $e');
-    return null;
   }
-}
-
 
   // Get a ride CID from the blockchain
   Future<String?> getRideCIDFromBlockchain(String rideId) async {
